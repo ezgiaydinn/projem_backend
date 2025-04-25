@@ -18,7 +18,7 @@ const db = mysql.createConnection({
   port: process.env.DB_PORT
 });
 
-app.get("/ping", (_req, res) => {
+app.get("/ping", (req, res) => {
   res.send("pong!");
 });
 
@@ -212,8 +212,8 @@ db.connect((err) => {
 
 
 // // Server başlat
-// const PORT = 3000;
-// app.listen(PORT,'0.0.0.0', () => {
-//   console.log(`🚀 Sunucu ${PORT} portunda çalışıyor`);
-// });
+ const PORT = 3000;
+ app.listen(PORT,'0.0.0.0', () => {
+ console.log(`🚀 Sunucu ${PORT} portunda çalışıyor`);
+ });
 // //////////////en son edit sayfasında kullanıcı görüntülemekte kaldım.///////////////
