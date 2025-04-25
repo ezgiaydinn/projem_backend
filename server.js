@@ -18,7 +18,7 @@ const db = mysql.createConnection({
   port: process.env.DB_PORT
 });
 
-app.get("/ping", (req, res) => {
+app.get("/", (req, res) => {
   res.send("pong!");
 });
 
