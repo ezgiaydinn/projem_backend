@@ -11,11 +11,13 @@ app.use(bodyParser.json());
 
 // MySQL bağlantısı
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'mezuniyet2025.', // kendi şifreni yaz
-  database: 'kitaptavsiyeapp'
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT
 });
+
 
 db.connect((err) => {
   if (err) {
@@ -81,7 +83,7 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const sql = 'SELECT * FROM users WHERE email = ? AND password = ? AND id = ?';
-  db.query(sql, [email, password][id], (err, results) => {//hata burda
+  db.query(sql, [email, password, userId], (err, results) => {//hata burda
     if (err) {
       console.error('Giriş hatası:', err);
       return res.status(500).json({ error: 'Sunucu hatası.' });
