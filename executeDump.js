@@ -1,21 +1,17 @@
 const fs = require("fs");
 const mysql = require("mysql2");
 
-// Railway ortam değişkenlerini kullanıyoruz
 const connection = mysql.createConnection({
-    host:"crossover.proxy.rlwy.net",
-    port:  3306,
-    user: process.env.DB_USER,
-    password: "ofljmHMoSHlqfAOWyjaZPyMadWoDODLS",
-    database: process.env.DB_NAME,
-    multipleStatements: true,
-  });
-  
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT || 3306,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  multipleStatements: true, // Dump içindeki birden fazla SQL komutu için
+});
 
-// dump.sql içeriğini oku
 const dump = fs.readFileSync("dump.sql", "utf8");
 
-// dump’ı çalıştır
 connection.query(dump, (err, results) => {
   if (err) {
     console.error("❌ Dump çalıştırma hatası:", err);
