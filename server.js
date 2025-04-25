@@ -22,12 +22,19 @@ app.get("/", (req, res) => {
   res.send("pong!");
 });
 
-app.get('/check-users', (req, res) => {
-  db.query("SELECT * FROM users LIMIT 5", (err, results) => {
+app.get('/check_users', (req, res) => {
+  db.query("SELECT * FROM users LIMIT 10", (err, results) => {
     if (err) {
-      console.error("Kullanıcı tablosu hatası:", err);
-      return res.status(500).json({ error: "users tablosu yok ya da boş", detay: err });
+      console.error("Hata:", err);
+      return res.status(500).json({ error: "Veritabanı hatası", detay: err });
     }
+    res.json(results);
+  });
+});
+
+app.get('/tables', (req, res) => {
+  db.query("SHOW TABLES", (err, results) => {
+    if (err) return res.status(500).json({ error: "Sorgu hatası", detay: err });
     res.json(results);
   });
 });
