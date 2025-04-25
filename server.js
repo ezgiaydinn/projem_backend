@@ -22,7 +22,12 @@ app.get("/", (req, res) => {
   res.send("pong!");
 });
 
-
+app.get('/tables', (req, res) => {
+  db.query("SHOW TABLES", (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(result);
+  });
+});
 db.connect((err) => {
   if (err) {
     console.error('MySQL bağlantı hatası:', err);
