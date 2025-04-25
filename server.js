@@ -1,10 +1,10 @@
 const express = require('express');
 const mysql = require('mysql2');
-const multer = require("multer");
-const path = require("path");
+//const multer = require("multer");
+//const path = require("path");
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const router = express.Router();
+//const router = express.Router();
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -18,7 +18,7 @@ const db = mysql.createConnection({
   port: process.env.DB_PORT
 });
 
-app.get("/ping", (req, res) => {
+app.get("/ping", (_req, res) => {
   res.send("pong!");
 });
 
@@ -31,17 +31,17 @@ db.connect((err) => {
   console.log('✅ MySQL bağlantısı kuruldu.');
 });
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/");
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + path.extname(file.originalname);
-    cb(null, file.fieldname + "-" + uniqueSuffix);
-  },
-});
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, "uploads/");
+//   },
+//   filename: function (req, file, cb) {
+//     const uniqueSuffix = Date.now() + path.extname(file.originalname);
+//     cb(null, file.fieldname + "-" + uniqueSuffix);
+//   },
+// });
 
-const upload = multer({ storage: storage });
+// const upload = multer({ storage: storage });
 
 // app.use('/uploads', express.static('uploads')); // Fotoğraflara erişmek için
 
