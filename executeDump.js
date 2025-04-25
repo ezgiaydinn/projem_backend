@@ -4,7 +4,7 @@ const mysql = require("mysql2");
 // Railway ortam değişkenlerini kullanıyoruz
 const connection = mysql.createConnection({
     host:"crossover.proxy.rlwy.net",
-    port: process.env.DB_PORT || 3306,
+    port:  3306,
     user: process.env.DB_USER,
     password: "ofljmHMoSHlqfAOWyjaZPyMadWoDODLS",
     database: process.env.DB_NAME,
