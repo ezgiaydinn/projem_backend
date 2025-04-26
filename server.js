@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const mysql = require('mysql2');
 //const multer = require("multer");
@@ -23,7 +24,7 @@ app.get("/", (req, res) => {
 });
 
 app.get('/check_users', (req, res) => {
-  db.query("SELECT * FROM users LIMIT 10", (err, results) => {
+  db.query("SELECT * FROM users LIMIT 5", (err, results) => {
     if (err) {
       console.error("Hata:", err);
       return res.status(500).json({ error: "Veritabanı hatası", detay: err });
