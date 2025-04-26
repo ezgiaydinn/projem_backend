@@ -129,25 +129,39 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-// // Signup Route
-// app.post('/api/auth/signup', (req, res) => {
-//   const { name, email, password } = req.body;
+// Signup Route
+app.post('/api/auth/signup', (req, res) => {
+  const { name, email, password } = req.body;
 
-//   if (!name || !email || !password) {
-//     return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
-//   }
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
+  }
 
-//   const sql = 'INSERT INTO users (name, email, password) VALUES (?, ?, ?)';
+  // Önce aynı email var mı kontrol et
+  const checkUserSql = 'SELECT * FROM users WHERE email = ?';
+  db.query(checkUserSql, [email], (err, results) => {
+    if (err) {
+      console.error('Kullanıcı kontrol hatası:', err);
+      return res.status(500).json({ error: 'Sunucu hatası.' });
+    }
 
-//   db.query(sql, [name, email, password], (err, result) => {
-//     if (err) {
-//       console.error('Kayıt hatası:', err);
-//       return res.status(500).json({ error: 'Kayıt yapılamadı.' });
-//     }
+    if (results.length > 0) {
+      // Aynı email zaten kayıtlıysa hata döndür
+      return res.status(409).json({ error: 'Bu e-posta zaten kullanılıyor.' });
+    }
 
-//     return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
-//   });
-// });
+    // Email kullanılmıyorsa yeni kullanıcı ekle
+    const insertUserSql = 'INSERT INTO users (name, email, password) VALUES (?, ?, ?)';
+    db.query(insertUserSql, [name, email, password], (err, result) => {
+      if (err) {
+        console.error('Kayıt hatası:', err);
+        return res.status(500).json({ error: 'Kayıt yapılamadı.' });
+      }
+      return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
+    });
+  });
+});
+
 
 // // Kullanıcı bilgilerini getirme (Profil)
 // /*app.get('/api/user/:id', (req, res) => {
