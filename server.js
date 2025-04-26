@@ -1,4 +1,5 @@
 const express = require('express');
+
 //const multer = require("multer");
 //const path = require("path");
 const bodyParser = require('body-parser');
@@ -96,38 +97,37 @@ db.connect((err) => {
 // });
 
 
-// // Login Route
-//  app.post('/api/auth/login', (req, res) => {
-//    const { email, password } = req.body;
-//    const userId = req.params.id;
+// Login Route
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
 
-//    if (!email || !password) {
-//      return res.status(400).json({ error: 'Email ve şifre zorunludur.' });
-//    }
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email ve şifre zorunludur.' });
+  }
 
-//    const sql = 'SELECT * FROM users WHERE email = ? AND password = ? AND id = ?';
-//    db.query(sql, [email, password, userId], (err, results) => {//hata burda
-//      if (err) {
-//        console.error('Giriş hatası:', err);
-//        return res.status(500).json({ error: 'Sunucu hatası.' });
-//      }
+  const sql = 'SELECT * FROM users WHERE email = ? AND password = ?';
+  db.query(sql, [email, password], (err, results) => {
+    if (err) {
+      console.error('Giriş hatası:', err);
+      return res.status(500).json({ error: 'Sunucu hatası.' });
+    }
 
-//      if (results.length > 0) {
-//        return res.status(200).json({ message: 'Giriş başarılı!', 
-//          user: { 
-//            name: results[0].name,
-//            id: results[0].id,
-//            email: results[0].email 
-//          }
-//        })
-//      }
-   
-//      else 
-//      {
-//       return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
-//      }
-//    });
-//  });
+    if (results.length > 0) {
+      // Kullanıcı bulunduysa başarı cevabı dön
+      return res.status(200).json({
+        message: 'Giriş başarılı!',
+        user: {
+          id: results[0].id,
+          name: results[0].name,
+          email: results[0].email
+        }
+      });
+    } else {
+      // Kullanıcı bulunamadıysa hata dön
+      return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
+    }
+  });
+});
 
 // // Signup Route
 // app.post('/api/auth/signup', (req, res) => {
