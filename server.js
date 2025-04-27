@@ -4,17 +4,17 @@ const express = require('express');
 //const path = require("path");
 const bodyParser = require('body-parser');
 const cors = require('cors');
-//const router = express.Router();
+const router = express.Router();
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
 // MySQL bağlantısı
 const mysql = require('mysql2');
-require('dotenv').config(); // .env dosyasını yükle
+require('dotenv').config(); 
 
 const db = mysql.createConnection({
-  host: process.env.DB_HOST,       // 🔥 Burada process.env kullanılmalı!
+  host: process.env.DB_HOST,      
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
