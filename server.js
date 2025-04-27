@@ -162,6 +162,29 @@ app.post('/api/auth/signup', (req, res) => {
   });
 });
 
+// Profile Route
+app.get('/api/auth/profile/:userId', (req, res) => {
+  const { userId } = req.params;
+
+  const sql = 'SELECT id, name, email FROM users WHERE id = ?';
+
+  db.query(sql, [userId], (err, results) => {
+    if (err) {
+      console.error('Profil çekme hatası:', err);
+      return res.status(500).json({ error: 'Sunucu hatası.' });
+    }
+
+    if (results.length > 0) {
+      // Kullanıcı bulundu
+      const user = results[0];
+      return res.status(200).json({ user });
+    } else {
+      // Kullanıcı bulunamadı
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    }
+  });
+});
+
 
 // // Kullanıcı bilgilerini getirme (Profil)
 // /*app.get('/api/user/:id', (req, res) => {
