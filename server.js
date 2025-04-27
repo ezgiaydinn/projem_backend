@@ -185,6 +185,63 @@ app.get('/api/auth/profile/:userId', (req, res) => {
   });
 });
 
+// update profil route
+app.put('/api/auth/updateProfile', (req, res) => {
+  const { userId, field, value } = req.body;
+
+  if (!userId || !field || !value) {
+    return res.status(400).json({ error: 'Eksik veri gönderildi.' });
+  }
+
+  const allowedFields = ['name', 'email', 'password'];
+  if (!allowedFields.includes(field)) {
+    return res.status(400).json({ error: 'Güncellenmesi yasak bir alan seçildi.' });
+  }
+
+  const sql = `UPDATE users SET ${field} = ? WHERE id = ?`;
+  db.query(sql, [value, userId], (err, result) => {
+    if (err) {
+      console.error('Bilgi güncelleme hatası:', err);
+      return res.status(500).json({ error: 'Sunucu hatası.' });
+    }
+    return res.status(200).json({ message: 'Profil başarıyla güncellendi.' });
+  });
+});
+
+const multer = require('multer');
+const path = require('path');
+
+// Fotoğraf yüklemek için multer ayarları
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/'); // uploads klasörüne kaydedilecek
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
+
+// upload profil image
+app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
+  const { userId } = req.body;
+  const imagePath = req.file.path;
+
+  if (!userId || !req.file) {
+    return res.status(400).json({ error: 'Eksik veri veya dosya gönderildi.' });
+  }
+
+  const sql = 'UPDATE users SET profile_image = ? WHERE id = ?';
+  db.query(sql, [imagePath, userId], (err, result) => {
+    if (err) {
+      console.error('Profil fotoğrafı yükleme hatası:', err);
+      return res.status(500).json({ error: 'Sunucu hatası.' });
+    }
+    return res.status(200).json({ message: 'Profil fotoğrafı güncellendi.' });
+  });
+});
+
 
 // // Kullanıcı bilgilerini getirme (Profil)
 // /*app.get('/api/user/:id', (req, res) => {
