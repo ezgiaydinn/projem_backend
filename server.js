@@ -1,7 +1,7 @@
 const express = require('express');
 
-const multer = require("multer");
-const path = require("path");
+//const multer = require("multer");
+//const path = require("path");
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const router = express.Router();
