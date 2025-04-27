@@ -51,51 +51,6 @@ db.connect((err) => {
   console.log('✅ MySQL bağlantısı kuruldu.');
 });
 
-// const storage = multer.diskStorage({
-//   destination: function (req, file, cb) {
-//     cb(null, "uploads/");
-//   },
-//   filename: function (req, file, cb) {
-//     const uniqueSuffix = Date.now() + path.extname(file.originalname);
-//     cb(null, file.fieldname + "-" + uniqueSuffix);
-//   },
-// });
-
-// const upload = multer({ storage: storage });
-
-// app.use('/uploads', express.static('uploads')); // Fotoğraflara erişmek için
-
-// // 🔽 Bu endpoint Flutter'dan gelen resmi karşılar
-// app.post("/upload-profile-image", upload.single("profile_image"), (req, res) => {
-//   const userId = req.body.userId;
-//   const imagePath = req.file.path;
-
-//   if (!userId) {
-//     return res.status(400).json({ message: "Kullanıcı ID'si gerekli" });
-//   }
-  
-//   const sql = "UPDATE users SET profile_image = ? WHERE id = ?";
-//   db.query(sql, [imagePath, userId], (err, result) => {
-//     if (err) {
-//       console.error("Veritabanı hatası:", err);
-//       return res.status(500).json({ message: "Veritabanı hatası" });
-//     }
-//   })
-//   console.log(`Kullanıcı ${userId} için profil fotoğrafı güncellendi.`);
-//   res.status(200).json({ message: "Resim yüklendi", imageUrl: imagePath });
-// });
-
-// app.get('/api/user/:id', async (req, res) => {
-//   const userId = req.params.id;
-//   const user = await db.query("SELECT * FROM users WHERE id = ?", [userId]);
-
-//   if (user.length > 0) {
-//     res.json(user[0]);
-//   } else {
-//     res.status(404).json({ error: "Kullanıcı bulunamadı" });
-//   }
-// });
-
 
 // Login Route
 app.post('/api/auth/login', (req, res) => {
@@ -243,85 +198,106 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
 });
 
 
-// // Kullanıcı bilgilerini getirme (Profil)
-// /*app.get('/api/user/:id', (req, res) => {
-//   const userId = req.params.id;
+// Kitabı kaydetme veya güncelleme
+router.post('/api/books/save', async (req, res) => {
+  const {
+    userId,
+    bookId,
+    title,
+    authors,
+    thumbnailUrl,
+    publishedDate,
+    pageCount,
+    publisher,
+    description,
+    isFavorite,
+    rating
+  } = req.body;
 
-//   const query = 'SELECT email FROM users WHERE id = ?';
-//   db.query(query, [userId], (err, results) => {
-//     if (err) {
-//       console.error('Kullanıcı bilgisi alınamadı:', err);
-//       return res.status(500).json({ error: 'Sunucu hatası' });
-//     }
+  if (!userId || !bookId || !title) {
+    return res.status(400).json({ error: 'Eksik parametreler.' });
+  }
 
-//     if (results.length === 0) {
-//       return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
-//     }
+  try {
+    //  Kitap var mı kontrol et
+    const [bookRows] = await db.promise().query(
+      'SELECT * FROM books WHERE book_id = ?',
+      [bookId]
+    );
 
-//     const user = results[0];
-//     res.json({
-//       name: user.name, // Şimdilik sabit, istersen db'ye name sütunu da eklersin
-//       email: user.email
-//     });
-//   });
-// });*/
-// app.get('/user/:id', (req, res) => {
-//   const userId = req.params.id;
+    if (bookRows.length === 0) {
+      // Kitap veritabanında yoksa ekle
+      await db.promise().query(
+        'INSERT INTO books (book_id, title, authors, thumbnail_url, published_date, page_count, publisher, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          bookId,
+          title,
+          authors.join(', '),
+          thumbnailUrl,
+          publishedDate,
+          pageCount,
+          publisher,
+          description
+        ]
+      );
+    }
 
-//   db.query('SELECT name, email, password FROM users WHERE id = ?', [userId], (err, results) => {
-//     if (err) {
-//       console.error('Veri getirme hatası:', err);
-//       return res.status(500).json({ error: 'Server error' });
-//     }
+    //  Favori tablosuna kaydet/güncelle
+    if (isFavorite) {
+      await db.promise().query(
+        'INSERT IGNORE INTO favorites (user_id, book_id) VALUES (?, ?)',
+        [userId, bookId]
+      );
+    } else {
+      await db.promise().query(
+        'DELETE FROM favorites WHERE user_id = ? AND book_id = ?',
+        [userId, bookId]
+      );
+    }
 
-//     if (results.length === 0) {
-//       return res.status(404).json({ error: 'User not found' });
-//     }
+    //  Puan tablosuna kaydet/güncelle
+    if (rating > 0) {
+      await db.promise().query(
+        'INSERT INTO ratings (user_id, book_id, rating) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE rating = ?',
+        [userId, bookId, rating, rating]
+      );
+    } else {
+      await db.promise().query(
+        'DELETE FROM ratings WHERE user_id = ? AND book_id = ?',
+        [userId, bookId]
+      );
+    }
 
-//     res.json(results[0]);
-//   });
-// });
+    res.json({ message: 'Kitap ve kullanıcı bilgisi başarıyla kaydedildi.' });
+  } catch (error) {
+    console.error('Kitap kaydederken hata:', error);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
 
-// module.exports = router;
+// Favorites kaydetmek icin endpoint
+app.post('/api/favorites/add', (req, res) => {
+  const { userId, bookId } = req.body;
 
-// app.post('/updateProfile', (req, res) => {
-//   const { userId, field, value } = req.body;
+  if (!userId || !bookId) {
+    return res.status(400).json({ error: 'Kullanıcı ID ve Kitap ID gerekli.' });
+  }
 
-//   if (!userId || !field || !value) {
-//     return res.status(400).json({ error: 'Missing data' });
-//   }
+  const sql = `
+    INSERT INTO favorites (user_id, book_id)
+    VALUES (?, ?)
+    ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP
+  `;
 
-//   const allowedFields = ['name', 'email', 'password'];
-//   if (!allowedFields.includes(field)) {
-//     return res.status(400).json({ error: 'Invalid field' });
-//   }
+  db.query(sql, [userId, bookId], (err, result) => {
+    if (err) {
+      console.error('Favori ekleme hatası:', err);
+      return res.status(500).json({ error: 'Favori eklenemedi.' });
+    }
 
-//   const query = `UPDATE users SET \`${field}\` = ? WHERE id = ?`;
-//   db.query(query, [value, userId], (err, result) => {
-//     if (err) {
-//       console.error('Veri güncelleme hatası:', err);
-//       return res.status(500).json({ error: 'Database error' });
-//     }
-
-//     res.json({ success: true });
-//   });
-// });
-
-
-// app.put('/api/user/:id', (req, res) => {
-//   const userId = req.params.id;
-//   const { name, email, password } = req.body;
-
-//   const query = 'UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?';
-//   db.query(query, [name, email, password, userId], (err, result) => {
-//     if (err) {
-//       console.error('Kullanıcı güncellenemedi:', err);
-//       return res.status(500).json({ error: 'Güncelleme hatası' });
-//     }
-
-//     return res.status(200).json({ message: 'Kullanıcı başarıyla güncellendi' });
-//   });
-// });
+    return res.status(200).json({ message: 'Favori başarıyla kaydedildi.' });
+  });
+});
 
 
 // // Server başlat
