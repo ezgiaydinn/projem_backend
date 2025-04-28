@@ -198,106 +198,106 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
 });
 
 
-// Kitabı kaydetme veya güncelleme
-router.post('/api/books/save', async (req, res) => {
-  const {
-    userId,
-    bookId,
-    title,
-    authors,
-    thumbnailUrl,
-    publishedDate,
-    pageCount,
-    publisher,
-    description,
-    isFavorite,
-    rating
-  } = req.body;
+// // Kitabı kaydetme veya güncelleme
+// router.post('/api/books/save', async (req, res) => {
+//   const {
+//     userId,
+//     bookId,
+//     title,
+//     authors,
+//     thumbnailUrl,
+//     publishedDate,
+//     pageCount,
+//     publisher,
+//     description,
+//     isFavorite,
+//     rating
+//   } = req.body;
 
-  if (!userId || !bookId || !title) {
-    return res.status(400).json({ error: 'Eksik parametreler.' });
-  }
+//   if (!userId || !bookId || !title) {
+//     return res.status(400).json({ error: 'Eksik parametreler.' });
+//   }
 
-  try {
-    //  Kitap var mı kontrol et
-    const [bookRows] = await db.promise().query(
-      'SELECT * FROM books WHERE book_id = ?',
-      [bookId]
-    );
+//   try {
+//     //  Kitap var mı kontrol et
+//     const [bookRows] = await db.promise().query(
+//       'SELECT * FROM books WHERE book_id = ?',
+//       [bookId]
+//     );
 
-    if (bookRows.length === 0) {
-      // Kitap veritabanında yoksa ekle
-      await db.promise().query(
-        'INSERT INTO books (book_id, title, authors, thumbnail_url, published_date, page_count, publisher, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          bookId,
-          title,
-          authors.join(', '),
-          thumbnailUrl,
-          publishedDate,
-          pageCount,
-          publisher,
-          description
-        ]
-      );
-    }
+//     if (bookRows.length === 0) {
+//       // Kitap veritabanında yoksa ekle
+//       await db.promise().query(
+//         'INSERT INTO books (book_id, title, authors, thumbnail_url, published_date, page_count, publisher, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+//         [
+//           bookId,
+//           title,
+//           authors.join(', '),
+//           thumbnailUrl,
+//           publishedDate,
+//           pageCount,
+//           publisher,
+//           description
+//         ]
+//       );
+//     }
 
-    //  Favori tablosuna kaydet/güncelle
-    if (isFavorite) {
-      await db.promise().query(
-        'INSERT IGNORE INTO favorites (user_id, book_id) VALUES (?, ?)',
-        [userId, bookId]
-      );
-    } else {
-      await db.promise().query(
-        'DELETE FROM favorites WHERE user_id = ? AND book_id = ?',
-        [userId, bookId]
-      );
-    }
+//     //  Favori tablosuna kaydet/güncelle
+//     if (isFavorite) {
+//       await db.promise().query(
+//         'INSERT IGNORE INTO favorites (user_id, book_id) VALUES (?, ?)',
+//         [userId, bookId]
+//       );
+//     } else {
+//       await db.promise().query(
+//         'DELETE FROM favorites WHERE user_id = ? AND book_id = ?',
+//         [userId, bookId]
+//       );
+//     }
 
-    //  Puan tablosuna kaydet/güncelle
-    if (rating > 0) {
-      await db.promise().query(
-        'INSERT INTO ratings (user_id, book_id, rating) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE rating = ?',
-        [userId, bookId, rating, rating]
-      );
-    } else {
-      await db.promise().query(
-        'DELETE FROM ratings WHERE user_id = ? AND book_id = ?',
-        [userId, bookId]
-      );
-    }
+//     //  Puan tablosuna kaydet/güncelle
+//     if (rating > 0) {
+//       await db.promise().query(
+//         'INSERT INTO ratings (user_id, book_id, rating) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE rating = ?',
+//         [userId, bookId, rating, rating]
+//       );
+//     } else {
+//       await db.promise().query(
+//         'DELETE FROM ratings WHERE user_id = ? AND book_id = ?',
+//         [userId, bookId]
+//       );
+//     }
 
-    res.json({ message: 'Kitap ve kullanıcı bilgisi başarıyla kaydedildi.' });
-  } catch (error) {
-    console.error('Kitap kaydederken hata:', error);
-    res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-});
+//     res.json({ message: 'Kitap ve kullanıcı bilgisi başarıyla kaydedildi.' });
+//   } catch (error) {
+//     console.error('Kitap kaydederken hata:', error);
+//     res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
 
-// Favorites kaydetmek icin endpoint
-app.post('/api/favorites/add', (req, res) => {
-  const { userId, bookId } = req.body;
+// // Favorites kaydetmek icin endpoint
+// app.post('/api/favorites/add', (req, res) => {
+//   const { userId, bookId } = req.body;
 
-  if (!userId || !bookId) {
-    return res.status(400).json({ error: 'Kullanıcı ID ve Kitap ID gerekli.' });
-  }
+//   if (!userId || !bookId) {
+//     return res.status(400).json({ error: 'Kullanıcı ID ve Kitap ID gerekli.' });
+//   }
 
-  const sql = `
-    INSERT INTO favorites (user_id, book_id)
-    VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP
-  `;
+//   const sql = `
+//     INSERT INTO favorites (user_id, book_id)
+//     VALUES (?, ?)
+//     ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP
+//   `;
 
-  db.query(sql, [userId, bookId], (err, result) => {
-    if (err) {
-      console.error('Favori ekleme hatası:', err);
-      return res.status(500).json({ error: 'Favori eklenemedi.' });
-    }
+//   db.query(sql, [userId, bookId], (err, result) => {
+//     if (err) {
+//       console.error('Favori ekleme hatası:', err);
+//       return res.status(500).json({ error: 'Favori eklenemedi.' });
+//     }
 
-    return res.status(200).json({ message: 'Favori başarıyla kaydedildi.' });
-  });
-});
+//     return res.status(200).json({ message: 'Favori başarıyla kaydedildi.' });
+//   });
+// });
 
 
 // // Server başlat
