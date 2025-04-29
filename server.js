@@ -197,8 +197,8 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
   });
 });
 
-  const favoritesRoutes = require('./routes/favorites');
-  app.use('/api/favorites', favoritesRoutes);
+  //const favoritesRoutes = require('./routes/favorites');
+  //app.use('/api/favorites', favoritesRoutes);
 
 
 // // Kitabı kaydetme veya güncelleme
