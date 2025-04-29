@@ -221,7 +221,7 @@ app.post('/api/favorites/save', async (req, res) => {
     /* 1) Kitabı books tablosuna ekle (yoksa) */
     await db.promise().query(
       `INSERT IGNORE INTO books
-       (id, title, authors, thumbnailUrl, publishedDate, pageCount, publisher, description)
+       (id, title, authors, thumbnail_url, publishedDate, pageCount, published_year, description)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         bookId,
