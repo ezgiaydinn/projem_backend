@@ -248,6 +248,64 @@ app.post('/api/favorites/save', async (req, res) => {
   }
 });
 
+// =========================================================
+//  PUAN KAYDET / GÜNCELLE   —  POST /api/ratings/save
+// =========================================================
+app.post('/api/ratings/save', async (req, res) => {
+  const {
+    userId,
+    bookId,
+    rating,           // 1-5 arası
+    // — opsiyonel kitap bilgisi (title, authors …) —
+    title,
+    authors,
+    thumbnailUrl,
+    publishedDate,
+    pageCount,
+    publisher,
+    description
+  } = req.body;
+
+  if (!userId || !bookId || !rating) {
+    return res.status(400).json({ error: 'userId, bookId, rating zorunlu.' });
+  }
+  if (rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'rating 1-5 aralığında olmalı.' });
+  }
+
+  try {
+    /* 1) Kitap DB’de yoksa ekle (opsiyonel alanlar varsa) */
+    await db.promise().query(
+      `INSERT IGNORE INTO books
+       (id, title, authors, thumbnail_url, published_year, page_count, publisher, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bookId,
+        title ?? '',
+        authors ? JSON.stringify(authors) : '',
+        thumbnailUrl ?? '',
+        publishedDate ?? null,
+        pageCount ?? null,
+        publisher ?? '',
+        description ?? ''
+      ]
+    );
+
+    /* 2) ratings tablosuna ekle / güncelle */
+    await db.promise().query(
+      `INSERT INTO ratings (user_id, book_id, rating)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE rating = VALUES(rating), updated_at = CURRENT_TIMESTAMP`,
+      [userId, bookId, rating]
+    );
+
+    res.json({ message: 'Puan kaydedildi.' });
+  } catch (err) {
+    console.error('Puan kaydetme hatası:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
 
 
 // // Server başlat
