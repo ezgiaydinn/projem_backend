@@ -277,7 +277,7 @@ app.post('/api/ratings/save', async (req, res) => {
     /* 1) Kitap DB’de yoksa ekle (opsiyonel alanlar varsa) */
     await db.promise().query(
       `INSERT IGNORE INTO books
-       (id, title, authors, thumbnail_url, published_year, page_count, publisher, description)
+       (id, title, authors, thumbnail_url, published_year, page_count, description)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         bookId,
@@ -286,7 +286,6 @@ app.post('/api/ratings/save', async (req, res) => {
         thumbnailUrl ?? '',
         publishedDate ?? null,
         pageCount ?? null,
-        publisher ?? '',
         description ?? ''
       ]
     );
