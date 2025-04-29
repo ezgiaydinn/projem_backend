@@ -1,34 +1,35 @@
-// routes/auth.js
 const express = require('express');
-const router = express.Router();
-const db = require('../index');
+const router  = express.Router();
+const db      = require('../db');  // mysql2 pool
 
-router.post('/signup', async (req, res) => {
-  const { email, password } = req.body;
+router.post('/save', async (req, res) => {
+  const {
+    userId, bookId, title, authors, thumbnailUrl,
+    publishedDate, pageCount, publisher, description
+  } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'E-posta ve şifre zorunludur.' });
+  if (!userId || !bookId || !title) {
+    return res.status(400).json({ error: 'userId, bookId, title zorunlu' });
   }
 
   try {
-    const [existingUser] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-    if (existingUser.length > 0) {
-      return res.status(409).json({ error: 'Bu e-posta adresi zaten kayıtlı.' });
-    }
+    /* 1. Kitap yoksa ekle (INSERT IGNORE) */
+    await db.promise().query(`
+      INSERT IGNORE INTO books
+      (id,title,authors,thumbnailUrl,publishedDate,pageCount,publisher,description)
+      VALUES (?,?,?,?,?,?,?,?)`,
+      [ bookId, title, JSON.stringify(authors),
+        thumbnailUrl, publishedDate, pageCount, publisher, description ]);
 
-    const result = await db.query(
-      'INSERT INTO users (email, password_hash) VALUES (?, ?)',
-      [email, password] // UYARI: Gerçek uygulamada şifreyi hashlemelisiniz!
-    );
+    /* 2. Favori kaydı ekle */
+    await db.promise().query(`
+      INSERT IGNORE INTO favorites (user_id, book_id)
+      VALUES (?,?)`, [userId, bookId]);
 
-    if (result.affectedRows > 0) {
-      return res.status(201).json({ message: 'Kayıt başarıyla oluşturuldu.' });
-    } else {
-      return res.status(500).json({ error: 'Kayıt sırasında bir hata oluştu.' });
-    }
-  } catch (error) {
-    console.error('Kayıt sırasında veritabanı hatası:', error);
-    return res.status(500).json({ error: 'Kayıt sırasında bir sunucu hatası oluştu.' });
+    return res.json({ message: 'Favori kaydedildi' });
+  } catch (e) {
+    console.error('Fav hatası:', e);
+    return res.status(500).json({ error: 'Sunucu hatası' });
   }
 });
 
