@@ -117,6 +117,41 @@ app.post('/api/auth/signup', (req, res) => {
   });
 });
 
+// Kullanıcının favori kitaplarını döner
+app.get('/api/favorites/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const sql = `
+    SELECT b.*
+    FROM favorites f
+    JOIN books b ON f.book_id = b.id
+    WHERE f.user_id = ?
+  `;
+  db.promise().query(sql, [userId])
+    .then(([rows]) => res.json(rows))
+    .catch(err => {
+      console.error('Favorites çekme hatası:', err);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
+    });
+});
+
+// Kullanıcının puan verilerini döner
+app.get('/api/ratings/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const sql = `
+    SELECT b.*, r.rating
+    FROM ratings r
+    JOIN books b ON r.book_id = b.id
+    WHERE r.user_id = ?
+  `;
+  db.promise().query(sql, [userId])
+    .then(([rows]) => res.json(rows))
+    .catch(err => {
+      console.error('Ratings çekme hatası:', err);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
+    });
+});
+
+
 // Profile Route
 app.get('/api/auth/profile/:userId', (req, res) => {
   const { userId } = req.params;
