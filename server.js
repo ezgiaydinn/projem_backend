@@ -278,7 +278,7 @@ app.post('/api/ratings/save', async (req, res) => {
     await db.promise().query(
       `INSERT IGNORE INTO books
        (id, title, authors, thumbnail_url, published_year, page_count, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         bookId,
         title ?? '',
