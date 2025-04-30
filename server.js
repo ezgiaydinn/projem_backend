@@ -98,20 +98,44 @@ app.post('/api/auth/signup', (req, res) => {
 });
 
 // Kullanıcının favori kitaplarını döner
+// app.get('/api/favorites/:userId', async (req, res) => {
+//   const { userId } = req.params;
+//   const sql = `
+//     SELECT b.*
+//     FROM favorites f
+//     JOIN books b ON f.book_id = b.id
+//     WHERE f.user_id = ?
+//   `;
+//   db.promise().query(sql, [userId])
+//     .then(([rows]) => res.json(rows))
+//     .catch(err => {
+//       console.error('Favorites çekme hatası:', err);
+//       res.status(500).json({ error: 'Veritabanı hatası.' });
+//     });
+// });
 app.get('/api/favorites/:userId', async (req, res) => {
   const { userId } = req.params;
-  const sql = `
-    SELECT b.*
-    FROM favorites f
-    JOIN books b ON f.book_id = b.id
-    WHERE f.user_id = ?
-  `;
-  db.promise().query(sql, [userId])
-    .then(([rows]) => res.json(rows))
-    .catch(err => {
-      console.error('Favorites çekme hatası:', err);
-      res.status(500).json({ error: 'Veritabanı hatası.' });
-    });
+  try {
+    const [rows] = await db.query(
+      `SELECT
+         b.id,
+         b.title,
+         b.authors,
+         b.description,
+         b.thumbnail_url  AS thumbnailUrl,
+         b.published_date AS publishedDate,
+         b.page_count     AS pageCount,
+         b.publisher
+       FROM favorites f
+       JOIN books b ON f.book_id = b.id
+       WHERE f.user_id = ?`,
+      [userId]
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error('Favori çekme hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
 });
 
 // Kullanıcının puan verilerini döner
