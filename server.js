@@ -99,18 +99,49 @@ app.post('/api/auth/signup', (req, res) => {
 app.get('/api/favorites/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    // favorites ile books tablosunu join ediyoruz
     const sql = `
-      SELECT book_id AS id,
-             title,
-             author AS authors,       
-             thumbnail_url AS thumbnailUrl
-      FROM favorites
-      WHERE user_id = ?
-      ORDER BY created_at DESC
+      SELECT 
+        b.id,
+        b.title,
+        b.authors,           -- JSON string: '["Yazar1","Yazar2"]'
+        b.thumbnail_url      AS thumbnailUrl,
+        b.description,
+        b.publisher,
+        b.published_date     AS publishedDate,
+        b.page_count         AS pageCount,
+        b.industry_identifiers AS industryIdentifiers,
+        b.average_rating     AS averageRating,
+        b.ratings_count      AS ratingsCount
+      FROM favorites f
+      JOIN books b ON f.book_id = b.id
+      WHERE f.user_id = ?
+      ORDER BY f.created_at DESC
     `;
     const [rows] = await db.promise().query(sql, [userId]);
-    // Dilersen burada authors kolonu stringse tek string; liste bekliyorsan split(', ') yapabilirsin.
-    return res.json(rows);
+
+    // Her satırı Book.fromJson’a uyacak şekilde dönüştür
+    const result = rows.map(row => ({
+      id: row.id,
+      title: row.title,
+      authors: Array.isArray(row.authors)
+        // Eğer authors JSON tipindeyse direkt kullan
+        ? row.authors
+        // Eğer metin olarak saklanıyorsa JSON.parse et
+        : JSON.parse(row.authors || '[]'),
+      thumbnailUrl: row.thumbnailUrl,
+      description: row.description,
+      publisher: row.publisher,
+      publishedDate: row.publishedDate,
+      pageCount: row.pageCount,
+      industryIdentifiers: row.industryIdentifiers
+        ? JSON.parse(row.industryIdentifiers)
+        : null,
+      averageRating: row.averageRating,
+      ratingsCount: row.ratingsCount,
+    }));
+
+    return res.json(result);
   } catch (err) {
     console.error('Favoriler çekilirken hata:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
