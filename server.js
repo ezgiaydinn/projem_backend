@@ -409,62 +409,62 @@ app.post('/api/ratings/save', async (req, res) => {
 
 // server.js (veya routes/library.js)
 
-app.post('/api/library/add', async (req, res) => {
-  try {
-    const {
-      userId,
-      bookId,
-      title,
-      authors,        // dizi şeklinde ["Yazar1","Yazar2"]
-      thumbnailUrl,
-      publisher,
-      publishedDate,
-      pageCount,
-      description
-    } = req.body;
+// app.post('/api/library/add', async (req, res) => {
+//   try {
+//     const {
+//       userId,
+//       bookId,
+//       title,
+//       authors,        // dizi şeklinde ["Yazar1","Yazar2"]
+//       thumbnailUrl,
+//       publisher,
+//       publishedDate,
+//       pageCount,
+//       description
+//     } = req.body;
 
-    if (!userId || !bookId || !title) {
-      return res.status(400).json({ error: 'userId, bookId ve title zorunlu.' });
-    }
+//     if (!userId || !bookId || !title) {
+//       return res.status(400).json({ error: 'userId, bookId ve title zorunlu.' });
+//     }
 
-    // 1) librarys tablosuna kaydet (yoksa ekle / varsa güncelle)
-    const sql = `
-      INSERT INTO librarys 
-        (user_id, book_id, title, authors, thumbnail_url, publisher, published_date, page_count, description)
-      VALUES 
-        (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        title = VALUES(title),
-        authors = VALUES(authors),
-        thumbnail_url = VALUES(thumbnail_url),
-        publisher = VALUES(publisher),
-        published_date = VALUES(published_date),
-        page_count = VALUES(page_count),
-        description = VALUES(description),
-        added_at = CURRENT_TIMESTAMP
-    `;
+//     // 1) librarys tablosuna kaydet (yoksa ekle / varsa güncelle)
+//     const sql = `
+//       INSERT INTO librarys 
+//         (user_id, book_id, title, authors, thumbnail_url, publisher, published_date, page_count, description)
+//       VALUES 
+//         (?, ?, ?, ?, ?, ?, ?, ?, ?)
+//       ON DUPLICATE KEY UPDATE
+//         title = VALUES(title),
+//         authors = VALUES(authors),
+//         thumbnail_url = VALUES(thumbnail_url),
+//         publisher = VALUES(publisher),
+//         published_date = VALUES(published_date),
+//         page_count = VALUES(page_count),
+//         description = VALUES(description),
+//         added_at = CURRENT_TIMESTAMP
+//     `;
 
-    // authors dizisini virgülle birleştirelim
-    const authorsStr = Array.isArray(authors) ? authors.join(', ') : authors;
+//     // authors dizisini virgülle birleştirelim
+//     const authorsStr = Array.isArray(authors) ? authors.join(', ') : authors;
 
-    await db.promise().query(sql, [
-      userId,
-      bookId,
-      title,
-      authorsStr,
-      thumbnailUrl,
-      publisher,
-      publishedDate,
-      pageCount,
-      description,
-    ]);
+//     await db.promise().query(sql, [
+//       userId,
+//       bookId,
+//       title,
+//       authorsStr,
+//       thumbnailUrl,
+//       publisher,
+//       publishedDate,
+//       pageCount,
+//       description,
+//     ]);
 
-    return res.status(200).json({ message: 'Kitap kütüphaneye eklendi.' });
-  } catch (err) {
-    console.error('Kütüphane ekleme hatası:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-});
+//     return res.status(200).json({ message: 'Kitap kütüphaneye eklendi.' });
+//   } catch (err) {
+//     console.error('Kütüphane ekleme hatası:', err);
+//     return res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
 
 
 // GET /api/library/:userId
