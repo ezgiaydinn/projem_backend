@@ -22,15 +22,6 @@ const db = mysql.createConnection({
   multipleStatements: true
 });
 
-// Güvenlik ve e-posta için
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
-const sgMail = require('@sendgrid/mail');
-const multer = require('multer');
-const path = require('path');
-
-// SendGrid konfigürasyonu
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 db.connect((err) => {
   if (err) {
@@ -42,7 +33,7 @@ db.connect((err) => {
 
 
 // Login Route
-/*app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -71,55 +62,10 @@ db.connect((err) => {
       return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
     }
   });
-});*/
-
-// New Login Route
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  // 1) Gerekli alanlar kontrolü
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email ve şifre zorunludur.' });
-  }
-
-  try {
-    // 2) Sadece e-posta ile kullanıcıyı çek
-    const [rows] = await db.promise().query(
-      'SELECT id, name, email, password FROM users WHERE email = ?',
-      [email]
-    );
-
-    // 3) Kullanıcı yoksa
-    if (!rows.length) {
-      return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
-    }
-
-    const user = rows[0];
-
-    // 4) Bcrypt ile şifre karşılaştırması
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
-    }
-
-    // 5) Başarılı yanıt
-    return res.status(200).json({
-      message: 'Giriş başarılı!',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email
-      }
-    });
-  } catch (err) {
-    console.error('Login hatası:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
 });
 
-
 // Signup Route
-/*app.post('/api/auth/signup', (req, res) => {
+app.post('/api/auth/signup', (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
@@ -149,159 +95,133 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
     });
   });
-});*/
-
-//New Signup Route
-app.post('/api/auth/signup', async (req, res) => {
-  const { name, email, password } = req.body;
-
-  // 1) Gerekli alanlar kontrolü
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
-  }
-
-  try {
-    // 2) Aynı e-posta zaten kayıtlı mı?
-    const [existing] = await db.promise().query(
-      'SELECT id FROM users WHERE email = ?',
-      [email]
-    );
-    if (existing.length) {
-      return res.status(409).json({ error: 'Bu e-posta zaten kullanılıyor.' });
-    }
-
-    // 3) Şifreyi bcrypt ile hash’le
-    const hashedPwd = await bcrypt.hash(password, 10);
-
-    // 4) Yeni kullanıcıyı ekle
-    await db.promise().execute(
-      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-      [name, email, hashedPwd]
-    );
-
-    // 5) Başarı yanıtı
-    return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
-  } catch (err) {
-    console.error('Signup hatası:', err);
-    return res.status(500).json({ error: 'Kayıt yapılamadı.' });
-  }
 });
 
-// Forgot Password Route
-app.post('/api/auth/forgot-password', async (req, res) => {
-  const { email } = req.body;
+// server.js
 
-  // 1) Email alanı zorunlu
-  if (!email) {
-    return res.status(400).json({ error: 'Email zorunludur.' });
-  }
-
+app.post('/api/favorites/save', async (req, res) => {
   try {
-    // 2) Veritabanından userId'yi al
-    const [users] = await db.promise().query(
-      'SELECT id FROM users WHERE email = ?',
-      [email]
-    );
-    if (!users.length) {
-      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    const { userId, bookId, title, author, thumbnailUrl } = req.body;
+
+    if (!userId || !bookId || !title) {
+      return res.status(400).json({ error: 'Eksik parametreler.' });
     }
-    const userId = users[0].id;
 
-    // 3) Rastgele token ve SHA-256 hash'ini oluştur
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 saat geçerli
-
-    // 4) password_resets tablosuna kaydet
-    await db.promise().execute(
-      'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
-      [userId, tokenHash, expiresAt]
+    // 1) Kitabı books tablosuna ekle (eğer zaten varsa atla)
+    await db.promise().query(
+      `INSERT IGNORE INTO books 
+         (id, title, authors, thumbnail_url, description, published_year, page_count, genre, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bookId,
+        title,
+        JSON.stringify([ author ]),  // authors TEXT olarak JSON dizisi şeklinde saklanıyorsa
+        thumbnailUrl,
+        '',     // description alanı boş bırakılıyor
+        null,   // published_year yoksa null
+        null,   // page_count yoksa null
+        null,   // genre yoksa null
+        null    // language yoksa null
+      ]
     );
 
-    // 5) Reset linkini hazırla ve e-posta gönder
-    const resetLink = `${process.env.FRONTEND_URL}?token=${token}&id=${userId}`;
-    await sgMail.send({
-      to: email,
-      from: process.env.SENDGRID_FROM,
-      subject: 'Bookify Şifre Sıfırlama',
-      html: `
-        <p>Şifrenizi yenilemek için aşağıdaki linke tıklayın:</p>
-        <a href="${resetLink}">${resetLink}</a>
-        <p>Link 1 saat içinde geçerlidir.</p>
-      `
-    });
+    // 2) Ardından favorites tablosuna ekle veya güncelle
+    await db.promise().query(
+      `INSERT INTO favorites 
+         (user_id, book_id, title, author, thumbnail_url)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         title = VALUES(title),
+         author = VALUES(author),
+         thumbnail_url = VALUES(thumbnail_url),
+         created_at = CURRENT_TIMESTAMP`,
+      [
+        userId,
+        bookId,
+        title,
+        author,
+        thumbnailUrl
+      ]
+    );
 
-    // 6) İstemciye bilgi dön
-    return res.json({ message: 'Sıfırlama linki e-postanıza gönderildi.' });
+    return res.json({ message: 'Favori kaydedildi.' });
   } catch (err) {
-    console.error('Forgot-password hatası:', err);
+    console.error('Favori kaydederken hata:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
 
-// Reset Password Route
-app.post('/api/auth/reset-password', async (req, res) => {
-  const { userId, token, newPassword } = req.body;
 
-  // 1) Gerekli alanlar kontrolü
-  if (!userId || !token || !newPassword) {
-    return res.status(400).json({ error: 'userId, token ve newPassword zorunludur.' });
-  }
+ app.get('/api/favorites/:userId', async (req, res) => {
+   try {
+     const { userId } = req.params;
+     const sql = `
+       SELECT 
+         b.id,
+         b.title,
+         b.authors,
+         b.description,
+         b.thumbnail_url   AS thumbnailUrl,
+         b.published_year  AS publishedYear,
+         b.genre,
+         b.page_count      AS pageCount,
+         b.language
+       FROM favorites f
+       JOIN books b ON f.book_id = b.id
+       WHERE f.user_id = ?
+       ORDER BY f.created_at DESC
+     `;
+     const [rows] = await db.promise().query(sql, [userId]);
 
-  try {
-    // 2) Gönderilen token'ın SHA-256 hash’ini oluştur
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(token)
-      .digest('hex');
+     const result = rows.map(r => {
+       // Saf JS: önce JSON.parse dene, başarısızsa virgülle ayır ve boşları at
+       let authorsList = [];
+       if (r.authors) {
+         try {
+           authorsList = JSON.parse(r.authors);
+         } catch (_) {
+           authorsList = r.authors
+             .split(',')
+             .map(s => s.trim())
+             .filter(s => s.length > 0);
+         }
+       }
+       return {
+         id: r.id,
+         title: r.title,
+         authors: authorsList,
+         description: r.description,
+         thumbnailUrl: r.thumbnailUrl,
+         publishedYear: r.publishedYear,
+         genre: r.genre,
+         pageCount: r.pageCount,
+         language: r.language,
+       };
+     });
 
-    // 3) Bu hash ve userId için hâlâ geçerli bir kayıt var mı kontrol et
-    const [rows] = await db.promise().query(
-      `SELECT * FROM password_resets
-       WHERE user_id = ? AND token_hash = ? AND expires_at > NOW()`,
-      [userId, tokenHash]
-    );
-    if (!rows.length) {
-      return res.status(400).json({ error: 'Geçersiz veya süresi dolmuş token.' });
-    }
-
-    // 4) Yeni şifreyi bcrypt ile hash’le ve users tablosunu güncelle
-    const hashedPwd = await bcrypt.hash(newPassword, 10);
-    await db.promise().execute(
-      'UPDATE users SET password = ? WHERE id = ?',
-      [hashedPwd, userId]
-    );
-
-    // 5) Kullanılan token kaydını temizle
-    await db.promise().execute(
-      'DELETE FROM password_resets WHERE user_id = ?',
-      [userId]
-    );
-
-    // 6) Başarı yanıtı
-    return res.json({ message: 'Şifre başarıyla güncellendi.' });
-  } catch (err) {
-    console.error('Reset-password hatası:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-});
+     return res.json(result);
+   } catch (err) {
+     console.error('🚨 GET /api/favorites error:', err);
+     return res.status(500).json({ error: 'Sunucu hatası.' });
+   }
+ });
 
 // Kullanıcının favori kitaplarını döner
- app.get('/api/favorites/:userId', async (req, res) => {
-   const { userId } = req.params;
-   const sql = `
-     SELECT b.*
-     FROM favorites f
-     JOIN books b ON f.book_id = b.id
-     WHERE f.user_id = ?
-   `;
-   db.promise().query(sql, [userId])
-     .then(([rows]) => res.json(rows))
-     .catch(err => {
-       console.error('Favorites çekme hatası:', err);
-       res.status(500).json({ error: 'Veritabanı hatası.' });
-     });
- });
+//  app.get('/api/favorites/:userId', async (req, res) => {
+//    const { userId } = req.params;
+//    const sql = `
+//      SELECT b.*
+//      FROM favorites f
+//      JOIN books b ON f.book_id = b.id
+//      WHERE f.user_id = ?
+//    `;
+//    db.promise().query(sql, [userId])
+//      .then(([rows]) => res.json(rows))
+//      .catch(err => {
+//        console.error('Favorites çekme hatası:', err);
+//        res.status(500).json({ error: 'Veritabanı hatası.' });
+//      });
+//  });
 
 // app.get('/api/favorites/:userId', async (req, res) => {
 //   const { userId } = req.params;
@@ -370,7 +290,7 @@ app.get('/api/auth/profile/:userId', (req, res) => {
 });
 
 // update profil route
-/*app.put('/api/auth/updateProfile', (req, res) => {
+app.put('/api/auth/updateProfile', (req, res) => {
   const { userId, field, value } = req.body;
 
   if (!userId || !field || !value) {
@@ -390,44 +310,10 @@ app.get('/api/auth/profile/:userId', (req, res) => {
     }
     return res.status(200).json({ message: 'Profil başarıyla güncellendi.' });
   });
-});*/
-
-// Update Profile Route
-app.put('/api/auth/updateProfile', async (req, res) => {
-  const { userId, field, value } = req.body;
-  const allowedFields = ['name', 'email', 'password'];
-
-  // 1) Gerekli alanlar kontrolü
-  if (!userId || !field || !value) {
-    return res.status(400).json({ error: 'userId, field ve value zorunludur.' });
-  }
-  if (!allowedFields.includes(field)) {
-    return res.status(400).json({ error: 'Güncellenemez bir alan seçildi.' });
-  }
-
-  try {
-    // 2) Şifre güncelleniyorsa bcrypt ile hash’le
-    let newValue = value;
-    if (field === 'password') {
-      newValue = await bcrypt.hash(value, 10);
-    }
-
-    // 3) DB güncellemesi
-    await db.promise().execute(
-      `UPDATE users SET \`${field}\` = ? WHERE id = ?`,
-      [newValue, userId]
-    );
-
-    // 4) Başarı yanıtı
-    return res.json({ message: 'Profil başarıyla güncellendi.' });
-  } catch (err) {
-    console.error('Update-profile hatası:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
 });
 
-//const multer = require('multer');
-//const path = require('path');
+const multer = require('multer');
+const path = require('path');
 
 // Fotoğraf yüklemek için multer ayarları
 const storage = multer.diskStorage({
@@ -460,102 +346,98 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
   });
 });
 
-// New Upload Profile Image Route
-/*const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // uploads klasörüne kaydedecek
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    // Benzersiz bir dosya adı oluştur
-    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueName + path.extname(file.originalname));
-  }
-});
-const upload = multer({ storage });
+// server.js içinde veya ayrı routes/favorites.js
+// app.post('/api/favorites/save', async (req, res) => {
+//   try {
+//     const {
+//       userId,
+//       bookId,
+//       title,            
+//       author,           
+//       thumbnailUrl      
+//     } = req.body;
 
-app.post(
-  '/api/auth/uploadProfileImage',
-  upload.single('image'),
-  async (req, res) => {
-    const { userId } = req.body;
-    // Dosya bilgisinin varlığı kontrolü
-    if (!userId || !req.file) {
-      return res.status(400).json({ error: 'userId ve image dosyası zorunludur.' });
-    }
+//     if (!userId || !bookId || !title) {
+//       return res.status(400).json({ error: 'Eksik parametreler.' });
+//     }
 
-    const imagePath = req.file.path; // kaydedilen dosya yolu
+//     // 1) Kitap daha önce favorites yoksa ekle, varsa güncelle
+//     const sql = `
+//       INSERT INTO favorites (user_id, book_id, title, author, thumbnail_url)
+//       VALUES (?, ?, ?, ?, ?)
+//       ON DUPLICATE KEY UPDATE
+//         title = VALUES(title),
+//         author = VALUES(author),
+//         thumbnail_url = VALUES(thumbnail_url),
+//         created_at = CURRENT_TIMESTAMP
+//     `;
 
-    try {
-      // Veritabanına yeni profil resmi yolunu kaydet
-      await db.promise().execute(
-        'UPDATE users SET profile_image = ? WHERE id = ?',
-        [imagePath, userId]
-      );
+//     await db.promise().query(sql, [
+//       userId,
+//       bookId,
+//       title,
+//       author,
+//       thumbnailUrl,
+//     ]);
 
-      // Başarı yanıtı
-      return res.json({
-        message: 'Profil fotoğrafı başarıyla yüklendi.',
-        imageUrl: imagePath
-      });
-    } catch (err) {
-      console.error('UploadProfileImage hatası:', err);
-      return res.status(500).json({ error: 'Sunucu hatası.' });
-    }
-  }
-);*/
+//     return res.json({ message: 'Favori kaydedildi.' });
+//   } catch (err) {
+//     console.error('Favori kaydederken hata:', err);
+//     return res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
 
 
   // =========================================================
 //  FAVORİ KİTAP KAYDET  —  /api/favorites/save
 // =========================================================
-app.post('/api/favorites/save', async (req, res) => {
-  const {
-    userId,
-    bookId,
-    title,
-    authors,
-    thumbnailUrl,
-    publishedDate,
-    pageCount,
-    publisher,
-    description
-  } = req.body;
+// app.post('/api/favorites/save', async (req, res) => {
+//   const {
+//     userId,
+//     bookId,
+//     title,
+//     authors,
+//     thumbnailUrl,
+//     publishedDate,
+//     pageCount,
+//     publisher,
+//     description
+//   } = req.body;
 
-  if (!userId || !bookId || !title) {
-    return res.status(400).json({ error: 'userId, bookId, title zorunlu.' });
-  }
+//   if (!userId || !bookId || !title) {
+//     return res.status(400).json({ error: 'userId, bookId, title zorunlu.' });
+//   }
 
-  try {
-    /* 1) Kitabı books tablosuna ekle (yoksa) */
-    await db.promise().query(
-      `INSERT IGNORE INTO books
-       (id, title, authors, thumbnail_url, published_year, page_count, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        bookId,
-        title,
-        JSON.stringify(authors),      // authors dizisini stringle
-        thumbnailUrl,
-        publishedDate,
-        pageCount,
-        description
-      ]
-    );
+//   try {
+//     /* 1) Kitabı books tablosuna ekle (yoksa) */
+//     await db.promise().query(
+//       `INSERT IGNORE INTO books
+//        (id, title, authors, thumbnail_url, published_year, page_count, description)
+//        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+//       [
+//         bookId,
+//         title,
+//         JSON.stringify(authors),      // authors dizisini stringle
+//         thumbnailUrl,
+//         publishedDate,
+//         pageCount,
+//         description
+//       ]
+//     );
 
-    /* 2) Favori kaydını favorites tablosuna ekle */
-    await db.promise().query(
-      `INSERT IGNORE INTO favorites (user_id, book_id)
-       VALUES (?, ?)`,
-      [userId, bookId]
-    );
+//     /* 2) Favori kaydını favorites tablosuna ekle */
+//     await db.promise().query(
+//       `INSERT IGNORE INTO favorites (user_id, book_id)
+//        VALUES (?, ?)`,
+//       [userId, bookId]
+//     );
 
-    return res.json({ message: 'Favori kitap başarıyla kaydedildi.' });
-  } catch (err) {
-    console.error('Favori kaydetme hatası:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-});
+//     return res.json({ message: 'Favori kitap başarıyla kaydedildi.' });
+//   } catch (err) {
+//     console.error('Favori kaydetme hatası:', err);
+//     return res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
 
 // =========================================================
 //  PUAN KAYDET / GÜNCELLE   —  POST /api/ratings/save
@@ -614,11 +496,143 @@ app.post('/api/ratings/save', async (req, res) => {
   }
 });
 
+// server.js (veya routes/library.js)
+
+// app.post('/api/library/add', async (req, res) => {
+//   try {
+//     const {
+//       userId,
+//       bookId,
+//       title,
+//       authors,        // dizi şeklinde ["Yazar1","Yazar2"]
+//       thumbnailUrl,
+//       publisher,
+//       publishedDate,
+//       pageCount,
+//       description
+//     } = req.body;
+
+//     if (!userId || !bookId || !title) {
+//       return res.status(400).json({ error: 'userId, bookId ve title zorunlu.' });
+//     }
+
+//     // 1) librarys tablosuna kaydet (yoksa ekle / varsa güncelle)
+//     const sql = `
+//       INSERT INTO librarys 
+//         (user_id, book_id, title, authors, thumbnail_url, publisher, published_date, page_count, description)
+//       VALUES 
+//         (?, ?, ?, ?, ?, ?, ?, ?, ?)
+//       ON DUPLICATE KEY UPDATE
+//         title = VALUES(title),
+//         authors = VALUES(authors),
+//         thumbnail_url = VALUES(thumbnail_url),
+//         publisher = VALUES(publisher),
+//         published_date = VALUES(published_date),
+//         page_count = VALUES(page_count),
+//         description = VALUES(description),
+//         added_at = CURRENT_TIMESTAMP
+//     `;
+
+//     // authors dizisini virgülle birleştirelim
+//     const authorsStr = Array.isArray(authors) ? authors.join(', ') : authors;
+
+//     await db.promise().query(sql, [
+//       userId,
+//       bookId,
+//       title,
+//       authorsStr,
+//       thumbnailUrl,
+//       publisher,
+//       publishedDate,
+//       pageCount,
+//       description,
+//     ]);
+
+//     return res.status(200).json({ message: 'Kitap kütüphaneye eklendi.' });
+//   } catch (err) {
+//     console.error('Kütüphane ekleme hatası:', err);
+//     return res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
+
+
+// GET /api/library/:userId
+app.get('/api/library/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const [rows] = await db.promise().query(
+      'SELECT b.* FROM books b JOIN librarys l ON b.id = l.book_id WHERE l.user_id = ?',
+      [userId]
+    );
+    return res.json(rows); // rows: [{ id, title, authors, thumbnail_url, … }, …]
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+// Kütüphaneden kitap çıkarmak için endpoint
+app.post('/api/library/remove', async (req, res) => {
+  try {
+    const { userId, bookId } = req.body;
+
+    // Gerekli parametreler var mı kontrolü
+    if (!userId || !bookId) {
+      return res.status(400).json({ error: 'userId ve bookId gerekli.' });
+    }
+
+    // library tablosundan silme sorgusu
+    const deleteSql = `
+      DELETE FROM librarys
+      WHERE user_id = ? AND book_id = ?
+    `;
+    const [result] = await db.promise().query(deleteSql, [userId, bookId]);
+
+    // etkilenen satır yoksa 404 dönebilirsin, ama biz 200 ile dönüyoruz
+    return res.status(200).json({ message: 'Kitap kütüphaneden çıkarıldı.' });
+  } catch (err) {
+    console.error('Kütüphaneden çıkarma hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+
+app.post('/api/favorite-to-library', async (req, res) => {
+  try {
+    const { userId, bookId } = req.body;
+    if (!userId || !bookId) {
+      return res.status(400).json({ error: 'userId ve bookId gerekli.' });
+    }
+
+    // 1) librarys tablosuna ekle (yoksa güncelle):
+    const insertLibSql = `
+      INSERT INTO librarys (user_id, book_id, title)
+      SELECT ?, b.id, b.title
+      FROM books b
+      WHERE b.id = ?
+      ON DUPLICATE KEY UPDATE added_at = CURRENT_TIMESTAMP
+    `;
+    await db.promise().query(insertLibSql, [ userId, bookId ]);
+
+    // 2) favorites tablosundan sil
+    const deleteFavSql = `
+      DELETE FROM favorites
+      WHERE user_id = ? AND book_id = ?
+    `;
+    await db.promise().query(deleteFavSql, [ userId, bookId ]);
+
+    return res.status(200).json({ message: 'Kitap kütüphaneye taşındı.' });
+  } catch (err) {
+    console.error('🔴 Favoriyi kütüphaneye taşıma hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.', detail: err.message });
+  }
+});
+
 
 
 // // Server başlat
  const PORT = 3000;
  app.listen(PORT,'0.0.0.0', () => {
- console.log(`🚀 Sunucu ${PORT} portunda çalışıyor`);
+ console.log(`🚀 Sunucu ${PORT} portunda çalışıyor dilara`);
  });
-// //////////////en son edit sayfasında kullanıcı görüntülemekte kaldım.///////////////
+
+ 
