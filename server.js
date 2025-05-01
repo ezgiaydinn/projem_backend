@@ -359,7 +359,30 @@ app.get('/api/library/:userId', async (req, res) => {
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+// Kütüphaneden kitap çıkarmak için endpoint
+app.post('/api/library/remove', async (req, res) => {
+  try {
+    const { userId, bookId } = req.body;
 
+    // Gerekli parametreler var mı kontrolü
+    if (!userId || !bookId) {
+      return res.status(400).json({ error: 'userId ve bookId gerekli.' });
+    }
+
+    // library tablosundan silme sorgusu
+    const deleteSql = `
+      DELETE FROM librarys
+      WHERE user_id = ? AND book_id = ?
+    `;
+    const [result] = await db.promise().query(deleteSql, [userId, bookId]);
+
+    // etkilenen satır yoksa 404 dönebilirsin, ama biz 200 ile dönüyoruz
+    return res.status(200).json({ message: 'Kitap kütüphaneden çıkarıldı.' });
+  } catch (err) {
+    console.error('Kütüphaneden çıkarma hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
 
 
 app.post('/api/favorite-to-library', async (req, res) => {
