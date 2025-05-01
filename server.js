@@ -345,6 +345,23 @@ app.post('/api/ratings/save', async (req, res) => {
   }
 });
 
+// GET /api/library/:userId
+app.get('/api/library/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const [rows] = await db.promise().query(
+      'SELECT b.* FROM books b JOIN librarys l ON b.id = l.book_id WHERE l.user_id = ?',
+      [userId]
+    );
+    return res.json(rows); // rows: [{ id, title, authors, thumbnail_url, … }, …]
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+
+
 app.post('/api/favorite-to-library', async (req, res) => {
   try {
     const { userId, bookId } = req.body;
