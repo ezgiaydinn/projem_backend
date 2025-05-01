@@ -459,15 +459,15 @@ app.post('/api/ratings/save', async (req, res) => {
 //   }
 // });
 
-// Sunucu kodunuzdaki diğer route’ların üzerinde veya altında tek bir kez tanımlayın:
 app.get('/api/favorites/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const sql = `
-      SELECT 
+      SELECT
         f.book_id       AS id,
         f.title         AS title,
         b.authors       AS authorsJson,
+        f.author        AS favAuthor,
         b.thumbnail_url AS thumbnailUrl,
         f.created_at    AS createdAt
       FROM favorites f
@@ -475,26 +475,39 @@ app.get('/api/favorites/:userId', async (req, res) => {
       WHERE f.user_id = ?
       ORDER BY f.created_at DESC
     `;
-    // Veritabanından çek
     const [rows] = await db.promise().query(sql, [userId]);
 
-    // JSON.parse edip diziye dönüştür
     const result = rows.map(r => {
-      let authorsList;
-      try {
-        authorsList = JSON.parse(r.authorsJson);
-      } catch {
-        authorsList = [];
+      let authorsList = [];
+
+      // 1) Önce books.authors (JSON dizisi) deneriz
+      if (r.authorsJson) {
+        try {
+          const parsed = JSON.parse(r.authorsJson);
+          if (Array.isArray(parsed) && parsed.length) {
+            authorsList = parsed;
+          }
+        } catch (e) {
+          // parse hatası varsa ignore
+        }
       }
-      if (!Array.isArray(authorsList) || authorsList.length === 0) {
+
+      // 2) Eğer hâlâ boşsa, favorites.author sütunundan fallback al
+      if (authorsList.length === 0 && r.favAuthor) {
+        authorsList = [r.favAuthor];
+      }
+
+      // 3) Yine boşsa genel fallback
+      if (authorsList.length === 0) {
         authorsList = ['Bilinmeyen yazar'];
       }
+
       return {
-        id:            r.id,
-        title:         r.title,
-        authors:       authorsList,
-        thumbnailUrl:  r.thumbnailUrl || '',
-        createdAt:     r.createdAt
+        id:           r.id,
+        title:        r.title,
+        authors:      authorsList,
+        thumbnailUrl: r.thumbnailUrl || '',
+        createdAt:    r.createdAt
       };
     });
 
