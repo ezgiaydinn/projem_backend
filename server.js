@@ -459,38 +459,46 @@ app.post('/api/ratings/save', async (req, res) => {
 //   }
 // });
 
-// Basit favorites listesi — direk favorites tablosundan
 app.get('/api/favorites/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const sql = `
       SELECT 
-        book_id   AS id,
-        title,
-        COALESCE(author, '') AS authors,
-        thumbnail_url AS thumbnailUrl,
-        created_at
-      FROM favorites
-      WHERE user_id = ?
-      ORDER BY created_at DESC
+        f.book_id      AS id,
+        f.title,
+        b.authors      AS authorsJson,
+        b.thumbnail_url AS thumbnailUrl,
+        f.created_at
+      FROM favorites f
+      JOIN books     b ON f.book_id = b.id
+      WHERE f.user_id = ?
+      ORDER BY f.created_at DESC
     `;
     const [rows] = await db.promise().query(sql, [userId]);
 
-    const result = rows.map(r => ({
-      id: r.id,
-      title: r.title,
-      // Tek bir string olarak gelen author'ı diziye çeviriyoruz:
-      authors: r.authors
-        .split(',')
-        .map(s => s.trim())
-        .filter(s => s.length > 0),
-      thumbnailUrl: r.thumbnailUrl,
-      createdAt: r.created_at
-    }));
+    const result = rows.map(r => {
+      // books.authors JSON dizisi; parse edip diziye dönüştürelim
+      let authorsList = [];
+      try {
+        authorsList = JSON.parse(r.authorsJson);
+      } catch {
+        authorsList = [];
+      }
+      if (authorsList.length === 0) {
+        authorsList = ['Bilinmeyen yazar'];
+      }
+      return {
+        id: r.id,
+        title: r.title,
+        authors: authorsList,
+        thumbnailUrl: r.thumbnailUrl || '',
+        createdAt: r.created_at
+      };
+    });
 
     return res.json(result);
   } catch (err) {
-    console.error('GET /api/favorites simple error:', err);
+    console.error('GET /api/favorites error:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
