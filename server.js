@@ -345,7 +345,7 @@ app.post('/api/ratings/save', async (req, res) => {
   }
 });
 // server.js içinde (ya da ayrı bir router dosyasında)
-app.post('/api/favorites_librarys:userId', async (req, res) => {
+app.post('/api/favorites-to-library', async (req, res) => {
   try {
     const { userId, bookId } = req.body;
     if (!userId || !bookId) {
