@@ -354,8 +354,8 @@ app.post('/api/favorite-to-library', async (req, res) => {
 
     // 1) library tablosuna ekle (yoksa insert et)
     const insertLibSql = `
-      INSERT INTO librarys (user_id, book_id)
-      VALUES (?, ?)
+      INSERT INTO librarys (user_id, book_id, title)
+      VALUES (?, ?, ?)
       ON DUPLICATE KEY UPDATE added_at = CURRENT_TIMESTAMP
     `;
     await db.promise().query(insertLibSql, [userId, bookId]);
