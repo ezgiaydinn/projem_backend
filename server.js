@@ -555,42 +555,38 @@ app.post('/api/ratings/save', async (req, res) => {
 //   }
 // });
 
-
-// GET /api/library/:userId
-app.get('/api/library/:userId', async (req, res) => {
-  const { userId } = req.params;
+// Basit favorites listesi — direk favorites tablosundan
+app.get('/api/favorites/:userId', async (req, res) => {
   try {
-    const [rows] = await db.promise().query(
-      'SELECT b.* FROM books b JOIN librarys l ON b.id = l.book_id WHERE l.user_id = ?',
-      [userId]
-    );
-    return res.json(rows); // rows: [{ id, title, authors, thumbnail_url, … }, …]
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-});
-// Kütüphaneden kitap çıkarmak için endpoint
-app.post('/api/library/remove', async (req, res) => {
-  try {
-    const { userId, bookId } = req.body;
-
-    // Gerekli parametreler var mı kontrolü
-    if (!userId || !bookId) {
-      return res.status(400).json({ error: 'userId ve bookId gerekli.' });
-    }
-
-    // library tablosundan silme sorgusu
-    const deleteSql = `
-      DELETE FROM librarys
-      WHERE user_id = ? AND book_id = ?
+    const { userId } = req.params;
+    const sql = `
+      SELECT 
+        book_id   AS id,
+        title,
+        COALESCE(author, '') AS authors,
+        thumbnail_url AS thumbnailUrl,
+        created_at
+      FROM favorites
+      WHERE user_id = ?
+      ORDER BY created_at DESC
     `;
-    const [result] = await db.promise().query(deleteSql, [userId, bookId]);
+    const [rows] = await db.promise().query(sql, [userId]);
 
-    // etkilenen satır yoksa 404 dönebilirsin, ama biz 200 ile dönüyoruz
-    return res.status(200).json({ message: 'Kitap kütüphaneden çıkarıldı.' });
+    const result = rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      // Tek bir string olarak gelen author'ı diziye çeviriyoruz:
+      authors: r.authors
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0),
+      thumbnailUrl: r.thumbnailUrl,
+      createdAt: r.created_at
+    }));
+
+    return res.json(result);
   } catch (err) {
-    console.error('Kütüphaneden çıkarma hatası:', err);
+    console.error('GET /api/favorites simple error:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
