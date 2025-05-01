@@ -22,26 +22,6 @@ const db = mysql.createConnection({
   multipleStatements: true
 });
 
-app.get("/", (req, res) => {
-  res.send("pong!");
-});
-
-app.get('/check_users', (req, res) => {
-  db.query("SELECT * FROM users LIMIT 5", (err, results) => {
-    if (err) {
-      console.error("Hata:", err);
-      return res.status(500).json({ error: "Veritabanı hatası", detay: err });
-    }
-    res.json(results);
-  });
-});
-
-app.get('/tables', (req, res) => {
-  db.query("SHOW TABLES", (err, results) => {
-    if (err) return res.status(500).json({ error: "Sorgu hatası", detay: err });
-    res.json(results);
-  });
-});
 
 db.connect((err) => {
   if (err) {
@@ -116,6 +96,66 @@ app.post('/api/auth/signup', (req, res) => {
     });
   });
 });
+
+// Kullanıcının favori kitaplarını döner
+ app.get('/api/favorites/:userId', async (req, res) => {
+   const { userId } = req.params;
+   const sql = `
+     SELECT b.*
+     FROM favorites f
+     JOIN books b ON f.book_id = b.id
+     WHERE f.user_id = ?
+   `;
+   db.promise().query(sql, [userId])
+     .then(([rows]) => res.json(rows))
+     .catch(err => {
+       console.error('Favorites çekme hatası:', err);
+       res.status(500).json({ error: 'Veritabanı hatası.' });
+     });
+ });
+
+// app.get('/api/favorites/:userId', async (req, res) => {
+//   const { userId } = req.params;
+//   try {
+//     const [rows] = await db.query(
+//       `SELECT
+//          b.id,
+//          b.title,
+//          b.authors,
+//          b.description,
+//          b.thumbnail_url  AS thumbnailUrl,
+//          b.published_date AS publishedDate,
+//          b.page_count     AS pageCount,
+//          b.publisher
+//        FROM favorites f
+//        JOIN books b ON f.book_id = b.id
+//        WHERE f.user_id = ?`,
+//       [userId]
+//     );
+//     return res.json(rows);
+//   } catch (err) {
+//     console.error('Favori çekme hatası:', err);
+//     return res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
+
+// Kullanıcının puan verilerini döner
+app.get('/api/ratings/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const sql = `
+    SELECT b.*, r.rating
+    FROM ratings r
+    JOIN books b ON r.book_id = b.id
+    WHERE r.user_id = ?
+  `;
+  db.promise().query(sql, [userId])
+    .then(([rows]) => res.json(rows))
+    .catch(err => {
+      console.error('Ratings çekme hatası:', err);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
+    });
+});
+
 
 // Profile Route
 app.get('/api/auth/profile/:userId', (req, res) => {
@@ -221,16 +261,15 @@ app.post('/api/favorites/save', async (req, res) => {
     /* 1) Kitabı books tablosuna ekle (yoksa) */
     await db.promise().query(
       `INSERT IGNORE INTO books
-       (id, title, authors, thumbnail_url, published_year, pageCount, publisher, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, title, authors, thumbnail_url, published_year, page_count, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         bookId,
         title,
         JSON.stringify(authors),      // authors dizisini stringle
-        thumbnail_url,
-        published_year,
+        thumbnailUrl,
+        publishedDate,
         pageCount,
-        publisher,
         description
       ]
     );
@@ -246,6 +285,63 @@ app.post('/api/favorites/save', async (req, res) => {
   } catch (err) {
     console.error('Favori kaydetme hatası:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+// =========================================================
+//  PUAN KAYDET / GÜNCELLE   —  POST /api/ratings/save
+// =========================================================
+app.post('/api/ratings/save', async (req, res) => {
+  const {
+    userId,
+    bookId,
+    rating,           // 1-5 arası
+    // — opsiyonel kitap bilgisi (title, authors …) —
+    title,
+    authors,
+    thumbnailUrl,
+    publishedDate,
+    pageCount,
+    publisher,
+    description
+  } = req.body;
+
+  if (!userId || !bookId || !rating) {
+    return res.status(400).json({ error: 'userId, bookId, rating zorunlu.' });
+  }
+  if (rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'rating 1-5 aralığında olmalı.' });
+  }
+
+  try {
+    /* 1) Kitap DB’de yoksa ekle (opsiyonel alanlar varsa) */
+    await db.promise().query(
+      `INSERT IGNORE INTO books
+       (id, title, authors, thumbnail_url, published_year, page_count, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bookId,
+        title ?? '',
+        authors ? JSON.stringify(authors) : '',
+        thumbnailUrl ?? '',
+        publishedDate ?? null,
+        pageCount ?? null,
+        description ?? ''
+      ]
+    );
+
+    /* 2) ratings tablosuna ekle / güncelle */
+    await db.promise().query(
+      `INSERT INTO ratings (user_id, book_id, rating)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE rating = VALUES(rating), updated_at = CURRENT_TIMESTAMP`,
+      [userId, bookId, rating]
+    );
+
+    res.json({ message: 'Puan kaydedildi.' });
+  } catch (err) {
+    console.error('Puan kaydetme hatası:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
 
