@@ -459,40 +459,42 @@ app.post('/api/ratings/save', async (req, res) => {
 //   }
 // });
 
+// Sunucu kodunuzdaki diğer route’ların üzerinde veya altında tek bir kez tanımlayın:
 app.get('/api/favorites/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const sql = `
       SELECT 
-        f.book_id      AS id,
-        f.title,
-        b.authors      AS authorsJson,
+        f.book_id       AS id,
+        f.title         AS title,
+        b.authors       AS authorsJson,
         b.thumbnail_url AS thumbnailUrl,
-        f.created_at
+        f.created_at    AS createdAt
       FROM favorites f
       JOIN books     b ON f.book_id = b.id
       WHERE f.user_id = ?
       ORDER BY f.created_at DESC
     `;
+    // Veritabanından çek
     const [rows] = await db.promise().query(sql, [userId]);
 
+    // JSON.parse edip diziye dönüştür
     const result = rows.map(r => {
-      // books.authors JSON dizisi; parse edip diziye dönüştürelim
-      let authorsList = [];
+      let authorsList;
       try {
         authorsList = JSON.parse(r.authorsJson);
       } catch {
         authorsList = [];
       }
-      if (authorsList.length === 0) {
+      if (!Array.isArray(authorsList) || authorsList.length === 0) {
         authorsList = ['Bilinmeyen yazar'];
       }
       return {
-        id: r.id,
-        title: r.title,
-        authors: authorsList,
-        thumbnailUrl: r.thumbnailUrl || '',
-        createdAt: r.created_at
+        id:            r.id,
+        title:         r.title,
+        authors:       authorsList,
+        thumbnailUrl:  r.thumbnailUrl || '',
+        createdAt:     r.createdAt
       };
     });
 
@@ -502,7 +504,6 @@ app.get('/api/favorites/:userId', async (req, res) => {
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
 
 app.post('/api/favorite-to-library', async (req, res) => {
   try {
