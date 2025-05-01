@@ -96,62 +96,116 @@ app.post('/api/auth/signup', (req, res) => {
     });
   });
 });
+
 // server.js
 
-app.get('/api/favorites/:userId', async (req, res) => {
+app.post('/api/favorites/save', async (req, res) => {
   try {
-    const { userId } = req.params;
-    const sql = `
-      SELECT 
-        b.id,
-        b.title,
-        b.authors,
-        b.description,
-        b.thumbnail_url   AS thumbnailUrl,
-        b.published_year  AS publishedYear,
-        b.genre,
-        b.page_count      AS pageCount,
-        b.language
-      FROM favorites f
-      JOIN books b ON f.book_id = b.id
-      WHERE f.user_id = ?
-      ORDER BY f.created_at DESC
-    `;
-    const [rows] = await db.promise().query(sql, [userId]);
+    const { userId, bookId, title, author, thumbnailUrl } = req.body;
 
-    const result = rows.map(r => {
-      // Saf JS: önce JSON.parse dene, başarısızsa virgülle ayır ve boşları at
-      let authorsList = [];
-      if (r.authors) {
-        try {
-          authorsList = JSON.parse(r.authors);
-        } catch (_) {
-          authorsList = r.authors
-            .split(',')
-            .map(s => s.trim())
-            .filter(s => s.length > 0);
-        }
-      }
+    if (!userId || !bookId || !title) {
+      return res.status(400).json({ error: 'Eksik parametreler.' });
+    }
 
-      return {
-        id: r.id,
-        title: r.title,
-        authors: authorsList,
-        description: r.description,
-        thumbnailUrl: r.thumbnailUrl,
-        publishedYear: r.publishedYear,
-        genre: r.genre,
-        pageCount: r.pageCount,
-        language: r.language,
-      };
-    });
+    // 1) Kitabı books tablosuna ekle (eğer zaten varsa atla)
+    await db.promise().query(
+      `INSERT IGNORE INTO books 
+         (id, title, authors, thumbnail_url, description, published_year, page_count, genre, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bookId,
+        title,
+        JSON.stringify([ author ]),  // authors TEXT olarak JSON dizisi şeklinde saklanıyorsa
+        thumbnailUrl,
+        '',     // description alanı boş bırakılıyor
+        null,   // published_year yoksa null
+        null,   // page_count yoksa null
+        null,   // genre yoksa null
+        null    // language yoksa null
+      ]
+    );
 
-    return res.json(result);
+    // 2) Ardından favorites tablosuna ekle veya güncelle
+    await db.promise().query(
+      `INSERT INTO favorites 
+         (user_id, book_id, title, author, thumbnail_url)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         title = VALUES(title),
+         author = VALUES(author),
+         thumbnail_url = VALUES(thumbnail_url),
+         created_at = CURRENT_TIMESTAMP`,
+      [
+        userId,
+        bookId,
+        title,
+        author,
+        thumbnailUrl
+      ]
+    );
+
+    return res.json({ message: 'Favori kaydedildi.' });
   } catch (err) {
-    console.error('🚨 GET /api/favorites error:', err);
+    console.error('Favori kaydederken hata:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+
+
+// app.get('/api/favorites/:userId', async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+//     const sql = `
+//       SELECT 
+//         b.id,
+//         b.title,
+//         b.authors,
+//         b.description,
+//         b.thumbnail_url   AS thumbnailUrl,
+//         b.published_year  AS publishedYear,
+//         b.genre,
+//         b.page_count      AS pageCount,
+//         b.language
+//       FROM favorites f
+//       JOIN books b ON f.book_id = b.id
+//       WHERE f.user_id = ?
+//       ORDER BY f.created_at DESC
+//     `;
+//     const [rows] = await db.promise().query(sql, [userId]);
+
+//     const result = rows.map(r => {
+//       // Saf JS: önce JSON.parse dene, başarısızsa virgülle ayır ve boşları at
+//       let authorsList = [];
+//       if (r.authors) {
+//         try {
+//           authorsList = JSON.parse(r.authors);
+//         } catch (_) {
+//           authorsList = r.authors
+//             .split(',')
+//             .map(s => s.trim())
+//             .filter(s => s.length > 0);
+//         }
+//       }
+
+//       return {
+//         id: r.id,
+//         title: r.title,
+//         authors: authorsList,
+//         description: r.description,
+//         thumbnailUrl: r.thumbnailUrl,
+//         publishedYear: r.publishedYear,
+//         genre: r.genre,
+//         pageCount: r.pageCount,
+//         language: r.language,
+//       };
+//     });
+
+//     return res.json(result);
+//   } catch (err) {
+//     console.error('🚨 GET /api/favorites error:', err);
+//     return res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
 
 // Kullanıcının favori kitaplarını döner
 //  app.get('/api/favorites/:userId', async (req, res) => {
