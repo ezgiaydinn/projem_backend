@@ -96,23 +96,22 @@ app.post('/api/auth/signup', (req, res) => {
     });
   });
 });
+// server.js
+
 app.get('/api/favorites/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    // favorites ile books tablosunu join ediyoruz
     const sql = `
       SELECT 
         b.id,
         b.title,
-        b.authors,           -- JSON string: '["Yazar1","Yazar2"]'
-        b.thumbnail_url      AS thumbnailUrl,
+        b.authors,
         b.description,
-        b.publisher,
-        b.published_date     AS publishedDate,
-        b.page_count         AS pageCount,
-        b.industry_identifiers AS industryIdentifiers,
-        b.average_rating     AS averageRating,
-        b.ratings_count      AS ratingsCount
+        b.thumbnail_url   AS thumbnailUrl,
+        b.published_year  AS publishedYear,
+        b.genre,
+        b.page_count      AS pageCount,
+        b.language
       FROM favorites f
       JOIN books b ON f.book_id = b.id
       WHERE f.user_id = ?
@@ -120,30 +119,36 @@ app.get('/api/favorites/:userId', async (req, res) => {
     `;
     const [rows] = await db.promise().query(sql, [userId]);
 
-    // Her satırı Book.fromJson’a uyacak şekilde dönüştür
-    const result = rows.map(row => ({
-      id: row.id,
-      title: row.title,
-      authors: Array.isArray(row.authors)
-        // Eğer authors JSON tipindeyse direkt kullan
-        ? row.authors
-        // Eğer metin olarak saklanıyorsa JSON.parse et
-        : JSON.parse(row.authors || '[]'),
-      thumbnailUrl: row.thumbnailUrl,
-      description: row.description,
-      publisher: row.publisher,
-      publishedDate: row.publishedDate,
-      pageCount: row.pageCount,
-      industryIdentifiers: row.industryIdentifiers
-        ? JSON.parse(row.industryIdentifiers)
-        : null,
-      averageRating: row.averageRating,
-      ratingsCount: row.ratingsCount,
-    }));
+    const result = rows.map(r => {
+      // Saf JS: önce JSON.parse dene, başarısızsa virgülle ayır ve boşları at
+      let authorsList = [];
+      if (r.authors) {
+        try {
+          authorsList = JSON.parse(r.authors);
+        } catch (_) {
+          authorsList = r.authors
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
+        }
+      }
+
+      return {
+        id: r.id,
+        title: r.title,
+        authors: authorsList,
+        description: r.description,
+        thumbnailUrl: r.thumbnailUrl,
+        publishedYear: r.publishedYear,
+        genre: r.genre,
+        pageCount: r.pageCount,
+        language: r.language,
+      };
+    });
 
     return res.json(result);
   } catch (err) {
-    console.error('Favoriler çekilirken hata:', err);
+    console.error('🚨 GET /api/favorites error:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
