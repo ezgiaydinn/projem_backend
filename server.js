@@ -338,47 +338,39 @@ app.post('/api/ratings/save', async (req, res) => {
       [userId, bookId, rating]
     );
 
-    app.post('/api/favorite-to-library', (req, res) => {
-      const { userId, bookId } = req.body;
-    
-      if (!userId || !bookId) {
-        return res.status(400).json({ error: 'Eksik bilgi' });
-      }
-    
-      const insertQuery = `
-        INSERT INTO librarys (user_id, book_id, title, author, genre, thumbnail_url)
-        SELECT user_id, book_id, title, author, genre, thumbnail_url
-        FROM favorites
-        WHERE user_id = ? AND book_id = ?
-      `;
-    
-      const deleteQuery = `
-        DELETE FROM favorites
-        WHERE user_id = ? AND book_id = ?
-      `;
-    
-      db.query(insertQuery, [userId, bookId], (err, result) => {
-        if (err) {
-          console.error("Kopyalama hatası:", err);
-          return res.status(500).json({ error: 'Kopyalama başarısız' });
-        }
-    
-        db.query(deleteQuery, [userId, bookId], (err2, result2) => {
-          if (err2) {
-            console.error("Silme hatası:", err2);
-            return res.status(500).json({ error: 'Silme başarısız' });
-          }
-    
-          return res.status(200).json({ message: 'Kitap kütüphaneye taşındı' });
-        });
-      });
-    });
-    
-
     res.json({ message: 'Puan kaydedildi.' });
   } catch (err) {
     console.error('Puan kaydetme hatası:', err);
     res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+// server.js içinde (ya da ayrı bir router dosyasında)
+app.post('/api/favorite-to-library', async (req, res) => {
+  try {
+    const { userId, bookId } = req.body;
+    if (!userId || !bookId) {
+      return res.status(400).json({ error: 'userId ve bookId gerekli.' });
+    }
+
+    // 1) library tablosuna ekle (yoksa insert et)
+    const insertLibSql = `
+      INSERT INTO library (user_id, book_id)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE added_at = CURRENT_TIMESTAMP
+    `;
+    await db.promise().query(insertLibSql, [userId, bookId]);
+
+    // 2) favorites tablosundan sil
+    const deleteFavSql = `
+      DELETE FROM favorites
+      WHERE user_id = ? AND book_id = ?
+    `;
+    await db.promise().query(deleteFavSql, [userId, bookId]);
+
+    return res.status(200).json({ message: 'Kitap kütüphaneye taşındı.' });
+  } catch (err) {
+    console.error('Favoriyi kütüphaneye taşıma hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
 
