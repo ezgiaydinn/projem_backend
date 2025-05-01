@@ -22,6 +22,15 @@ const db = mysql.createConnection({
   multipleStatements: true
 });
 
+// Güvenlik ve e-posta için
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const sgMail = require('@sendgrid/mail');
+const multer = require('multer');
+const path = require('path');
+
+// SendGrid konfigürasyonu
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 db.connect((err) => {
   if (err) {
@@ -33,7 +42,7 @@ db.connect((err) => {
 
 
 // Login Route
-app.post('/api/auth/login', (req, res) => {
+/*app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -62,10 +71,55 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
     }
   });
+});*/
+
+// New Login Route
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  // 1) Gerekli alanlar kontrolü
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email ve şifre zorunludur.' });
+  }
+
+  try {
+    // 2) Sadece e-posta ile kullanıcıyı çek
+    const [rows] = await db.promise().query(
+      'SELECT id, name, email, password FROM users WHERE email = ?',
+      [email]
+    );
+
+    // 3) Kullanıcı yoksa
+    if (!rows.length) {
+      return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
+    }
+
+    const user = rows[0];
+
+    // 4) Bcrypt ile şifre karşılaştırması
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
+    }
+
+    // 5) Başarılı yanıt
+    return res.status(200).json({
+      message: 'Giriş başarılı!',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      }
+    });
+  } catch (err) {
+    console.error('Login hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
 });
 
+
 // Signup Route
-app.post('/api/auth/signup', (req, res) => {
+/*app.post('/api/auth/signup', (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
@@ -95,6 +149,141 @@ app.post('/api/auth/signup', (req, res) => {
       return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
     });
   });
+});*/
+
+//New Signup Route
+app.post('/api/auth/signup', async (req, res) => {
+  const { name, email, password } = req.body;
+
+  // 1) Gerekli alanlar kontrolü
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
+  }
+
+  try {
+    // 2) Aynı e-posta zaten kayıtlı mı?
+    const [existing] = await db.promise().query(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
+    );
+    if (existing.length) {
+      return res.status(409).json({ error: 'Bu e-posta zaten kullanılıyor.' });
+    }
+
+    // 3) Şifreyi bcrypt ile hash’le
+    const hashedPwd = await bcrypt.hash(password, 10);
+
+    // 4) Yeni kullanıcıyı ekle
+    await db.promise().execute(
+      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
+      [name, email, hashedPwd]
+    );
+
+    // 5) Başarı yanıtı
+    return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
+  } catch (err) {
+    console.error('Signup hatası:', err);
+    return res.status(500).json({ error: 'Kayıt yapılamadı.' });
+  }
+});
+
+// Forgot Password Route
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  // 1) Email alanı zorunlu
+  if (!email) {
+    return res.status(400).json({ error: 'Email zorunludur.' });
+  }
+
+  try {
+    // 2) Veritabanından userId'yi al
+    const [users] = await db.promise().query(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
+    );
+    if (!users.length) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    }
+    const userId = users[0].id;
+
+    // 3) Rastgele token ve SHA-256 hash'ini oluştur
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 saat geçerli
+
+    // 4) password_resets tablosuna kaydet
+    await db.promise().execute(
+      'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+      [userId, tokenHash, expiresAt]
+    );
+
+    // 5) Reset linkini hazırla ve e-posta gönder
+    const resetLink = `${process.env.FRONTEND_URL}?token=${token}&id=${userId}`;
+    await sgMail.send({
+      to: email,
+      from: process.env.SENDGRID_FROM,
+      subject: 'Bookify Şifre Sıfırlama',
+      html: `
+        <p>Şifrenizi yenilemek için aşağıdaki linke tıklayın:</p>
+        <a href="${resetLink}">${resetLink}</a>
+        <p>Link 1 saat içinde geçerlidir.</p>
+      `
+    });
+
+    // 6) İstemciye bilgi dön
+    return res.json({ message: 'Sıfırlama linki e-postanıza gönderildi.' });
+  } catch (err) {
+    console.error('Forgot-password hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+// Reset Password Route
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { userId, token, newPassword } = req.body;
+
+  // 1) Gerekli alanlar kontrolü
+  if (!userId || !token || !newPassword) {
+    return res.status(400).json({ error: 'userId, token ve newPassword zorunludur.' });
+  }
+
+  try {
+    // 2) Gönderilen token'ın SHA-256 hash’ini oluştur
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    // 3) Bu hash ve userId için hâlâ geçerli bir kayıt var mı kontrol et
+    const [rows] = await db.promise().query(
+      `SELECT * FROM password_resets
+       WHERE user_id = ? AND token_hash = ? AND expires_at > NOW()`,
+      [userId, tokenHash]
+    );
+    if (!rows.length) {
+      return res.status(400).json({ error: 'Geçersiz veya süresi dolmuş token.' });
+    }
+
+    // 4) Yeni şifreyi bcrypt ile hash’le ve users tablosunu güncelle
+    const hashedPwd = await bcrypt.hash(newPassword, 10);
+    await db.promise().execute(
+      'UPDATE users SET password = ? WHERE id = ?',
+      [hashedPwd, userId]
+    );
+
+    // 5) Kullanılan token kaydını temizle
+    await db.promise().execute(
+      'DELETE FROM password_resets WHERE user_id = ?',
+      [userId]
+    );
+
+    // 6) Başarı yanıtı
+    return res.json({ message: 'Şifre başarıyla güncellendi.' });
+  } catch (err) {
+    console.error('Reset-password hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
 });
 
 // Kullanıcının favori kitaplarını döner
@@ -181,7 +370,7 @@ app.get('/api/auth/profile/:userId', (req, res) => {
 });
 
 // update profil route
-app.put('/api/auth/updateProfile', (req, res) => {
+/*app.put('/api/auth/updateProfile', (req, res) => {
   const { userId, field, value } = req.body;
 
   if (!userId || !field || !value) {
@@ -201,10 +390,44 @@ app.put('/api/auth/updateProfile', (req, res) => {
     }
     return res.status(200).json({ message: 'Profil başarıyla güncellendi.' });
   });
+});*/
+
+// Update Profile Route
+app.put('/api/auth/updateProfile', async (req, res) => {
+  const { userId, field, value } = req.body;
+  const allowedFields = ['name', 'email', 'password'];
+
+  // 1) Gerekli alanlar kontrolü
+  if (!userId || !field || !value) {
+    return res.status(400).json({ error: 'userId, field ve value zorunludur.' });
+  }
+  if (!allowedFields.includes(field)) {
+    return res.status(400).json({ error: 'Güncellenemez bir alan seçildi.' });
+  }
+
+  try {
+    // 2) Şifre güncelleniyorsa bcrypt ile hash’le
+    let newValue = value;
+    if (field === 'password') {
+      newValue = await bcrypt.hash(value, 10);
+    }
+
+    // 3) DB güncellemesi
+    await db.promise().execute(
+      `UPDATE users SET \`${field}\` = ? WHERE id = ?`,
+      [newValue, userId]
+    );
+
+    // 4) Başarı yanıtı
+    return res.json({ message: 'Profil başarıyla güncellendi.' });
+  } catch (err) {
+    console.error('Update-profile hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
 });
 
-const multer = require('multer');
-const path = require('path');
+//const multer = require('multer');
+//const path = require('path');
 
 // Fotoğraf yüklemek için multer ayarları
 const storage = multer.diskStorage({
@@ -236,6 +459,52 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
     return res.status(200).json({ message: 'Profil fotoğrafı güncellendi.' });
   });
 });
+
+// New Upload Profile Image Route
+/*const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // uploads klasörüne kaydedecek
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    // Benzersiz bir dosya adı oluştur
+    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueName + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage });
+
+app.post(
+  '/api/auth/uploadProfileImage',
+  upload.single('image'),
+  async (req, res) => {
+    const { userId } = req.body;
+    // Dosya bilgisinin varlığı kontrolü
+    if (!userId || !req.file) {
+      return res.status(400).json({ error: 'userId ve image dosyası zorunludur.' });
+    }
+
+    const imagePath = req.file.path; // kaydedilen dosya yolu
+
+    try {
+      // Veritabanına yeni profil resmi yolunu kaydet
+      await db.promise().execute(
+        'UPDATE users SET profile_image = ? WHERE id = ?',
+        [imagePath, userId]
+      );
+
+      // Başarı yanıtı
+      return res.json({
+        message: 'Profil fotoğrafı başarıyla yüklendi.',
+        imageUrl: imagePath
+      });
+    } catch (err) {
+      console.error('UploadProfileImage hatası:', err);
+      return res.status(500).json({ error: 'Sunucu hatası.' });
+    }
+  }
+);*/
+
 
   // =========================================================
 //  FAVORİ KİTAP KAYDET  —  /api/favorites/save
