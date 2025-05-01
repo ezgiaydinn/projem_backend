@@ -352,14 +352,15 @@ app.post('/api/favorite-to-library', async (req, res) => {
       return res.status(400).json({ error: 'userId ve bookId gerekli.' });
     }
 
-    // 1) librarys tablosuna ekle (yoksa insert et)
+    // 1) librarys tablosuna ekle (yoksa güncelle):
     const insertLibSql = `
       INSERT INTO librarys (user_id, book_id, title)
-      VALUES (?, ?, ?)
+      SELECT ?, b.id, b.title
+      FROM books b
+      WHERE b.id = ?
       ON DUPLICATE KEY UPDATE added_at = CURRENT_TIMESTAMP
     `;
-    // *** 3. parametreyi (title) eklemeyi unutursan SQL hata verir ***
-    await db.promise().query(insertLibSql, [ userId, bookId, req.body.title ]);
+    await db.promise().query(insertLibSql, [ userId, bookId ]);
 
     // 2) favorites tablosundan sil
     const deleteFavSql = `
@@ -371,10 +372,7 @@ app.post('/api/favorite-to-library', async (req, res) => {
     return res.status(200).json({ message: 'Kitap kütüphaneye taşındı.' });
   } catch (err) {
     console.error('🔴 Favoriyi kütüphaneye taşıma hatası:', err);
-    // İstersen detaylı mesaj da dön
-    return res
-      .status(500)
-      .json({ error: 'Sunucu hatası.', detail: err.message });
+    return res.status(500).json({ error: 'Sunucu hatası.', detail: err.message });
   }
 });
 
