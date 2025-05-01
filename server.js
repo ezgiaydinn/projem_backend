@@ -632,5 +632,5 @@ app.post('/api/favorite-to-library', async (req, res) => {
 // // Server başlat
  const PORT = 3000;
  app.listen(PORT,'0.0.0.0', () => {
- console.log(`🚀 Sunucu ${PORT} portunda çalışıyor dilara`);
+ console.log(`🚀 Sunucu ${PORT} portunda çalışıyor`);
  });
