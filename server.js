@@ -468,19 +468,19 @@ app.post('/api/library/add', async (req, res) => {
 
 
 // GET /api/library/:userId
-app.get('/api/library/:userId', async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const [rows] = await db.promise().query(
-      'SELECT b.* FROM books b JOIN librarys l ON b.id = l.book_id WHERE l.user_id = ?',
-      [userId]
-    );
-    return res.json(rows); // rows: [{ id, title, authors, thumbnail_url, … }, …]
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-});
+// app.get('/api/library/:userId', async (req, res) => {
+//   const { userId } = req.params;
+//   try {
+//     const [rows] = await db.promise().query(
+//       'SELECT b.* FROM books b JOIN librarys l ON b.id = l.book_id WHERE l.user_id = ?',
+//       [userId]
+//     );
+//     return res.json(rows); // rows: [{ id, title, authors, thumbnail_url, … }, …]
+//   } catch (err) {
+//     console.error(err);
+//     return res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
 // Kütüphaneden kitap çıkarmak için endpoint
 app.post('/api/library/remove', async (req, res) => {
   try {
