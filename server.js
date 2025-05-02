@@ -399,6 +399,61 @@ app.post('/api/favorite-to-library', async (req, res) => {
   }
 });
 
+// GET /api/library/:userId — kullanıcının kütüphanesini döner
+app.get('/api/library/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const sql = `
+      SELECT
+        l.book_id      AS id,
+        l.title        AS title,
+        l.author       AS author,
+        l.genre        AS genre,
+        l.thumbnail_url AS thumbnailUrl,
+        l.added_at     AS addedAt,
+        b.authors      AS authorsJson,
+        b.published_year AS publishedYear,
+        b.publisher      AS publisher,
+        b.description    AS description,
+        b.page_count     AS pageCount,
+        b.language       AS language
+      FROM librarys l
+      JOIN books   b ON l.book_id = b.id
+      WHERE l.user_id = ?
+      ORDER BY l.added_at DESC
+    `;
+    const [rows] = await db.promise().query(sql, [userId]);
+
+    const result = rows.map(r => {
+      let authors = [];
+      if (r.authorsJson) {
+        try { authors = JSON.parse(r.authorsJson); } catch (_) {}
+      }
+      // fallback
+      if (!authors.length && r.author) authors = [r.author];
+      if (!authors.length) authors = ['Bilinmeyen yazar'];
+
+      return {
+        id:            r.id,
+        title:         r.title,
+        authors,
+        thumbnailUrl:  r.thumbnailUrl || '',
+        genre:         r.genre || '',
+        description:   r.description || '',
+        publisher:     r.publisher || '',
+        publishedYear: r.publishedYear || null,
+        pageCount:     r.pageCount || 0,
+        language:      r.language || '',
+        addedAt:       r.addedAt
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('GET /api/library error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
 
 
 // // Server başlat
