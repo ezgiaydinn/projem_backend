@@ -256,7 +256,14 @@ app.get('/api/favorites/:userId', async (req, res) => {
         b.authors       AS authorsJson,
         f.author        AS favAuthor,
         b.thumbnail_url AS thumbnailUrl,
-        f.created_at    AS createdAt
+        b.description,
+        b.publisher,
+        b.published_date   AS publishedDate,
+        b.page_count       AS pageCount,
+        b.industry_identifiers AS industryIdentifiers,
+        b.average_rating       AS averageRating,
+        b.ratings_count        AS ratingsCount,
+        f.created_at      AS createdAt
       FROM favorites f
       JOIN books     b ON f.book_id = b.id
       WHERE f.user_id = ?
@@ -265,40 +272,39 @@ app.get('/api/favorites/:userId', async (req, res) => {
     const [rows] = await db.promise().query(sql, [userId]);
 
     const result = rows.map(r => {
+      // authors
       let authorsList = [];
-
-      // 1) JSON.parse ile books.authors (JSON dizisi) dene
       if (r.authorsJson) {
         try {
           const parsed = JSON.parse(r.authorsJson);
-          if (Array.isArray(parsed) && parsed.length) {
-            return { // doğrudan dön
-              id:           r.id,
-              title:        r.title,
-              authors:      parsed,
-              thumbnailUrl: r.thumbnailUrl || '',
-              createdAt:    r.createdAt
-            };
-          }
-        } catch (_){}
+          if (Array.isArray(parsed)) authorsList = parsed;
+        } catch (_) {}
       }
-
-      // 2) Fallback olarak favorites.author sütununu al
-      if (r.favAuthor) {
+      if (!authorsList.length && r.favAuthor) {
         authorsList = [r.favAuthor];
       }
 
-      // 3) Son çaresi
-      if (!authorsList.length) {
-        authorsList = ['Bilinmeyen yazar'];
+      // industryIdentifiers
+      let ids = [];
+      if (r.industryIdentifiers) {
+        try {
+          ids = JSON.parse(r.industryIdentifiers);
+        } catch (_) {}
       }
 
       return {
-        id:           r.id,
-        title:        r.title,
-        authors:      authorsList,
-        thumbnailUrl: r.thumbnailUrl || '',
-        createdAt:    r.createdAt
+        id:               r.id,
+        title:            r.title,
+        authors:          authorsList.length ? authorsList : ['Bilinmeyen yazar'],
+        thumbnailUrl:     r.thumbnailUrl || '',
+        description:      r.description || '',
+        publisher:        r.publisher || '',
+        publishedDate:    r.publishedDate || '',
+        pageCount:        r.pageCount || 0,
+        industryIdentifiers: ids,
+        averageRating:    r.averageRating ?? null,
+        ratingsCount:     r.ratingsCount ?? 0,
+        // createdAt:      r.createdAt   // Book modelınızda yoksa atabilirsiniz
       };
     });
 
@@ -308,6 +314,7 @@ app.get('/api/favorites/:userId', async (req, res) => {
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+
 
 
 app.post('/api/favorite-to-library', async (req, res) => {
