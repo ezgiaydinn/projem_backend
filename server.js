@@ -198,63 +198,47 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
 // -------------------------
 // POST /api/favorites/save
 // -------------------------
-app.get('/api/favorites/:userId', async (req, res) => {
+app.post('/api/favorites/save', async (req, res) => {
   try {
-    const { userId } = req.params;
-    const sql = `
-      SELECT
-        f.book_id      AS id,
-        f.title        AS title,
-        b.authors      AS authorsJson,
-        f.author       AS favAuthor,
-        b.thumbnail_url AS thumbnailUrl,
-        b.published_year AS publishedYear,
-        b.genre         AS genre,
-        b.page_count    AS pageCount,
-        b.language      AS language,
-        f.created_at    AS createdAt
-      FROM favorites f
-      JOIN books b ON f.book_id = b.id
-      WHERE f.user_id = ?
-      ORDER BY f.created_at DESC
-    `;
-    const [rows] = await db.promise().query(sql, [userId]);
+    const { userId, bookId, title, author, thumbnailUrl } = req.body;
+    if (!userId || !bookId || !title) {
+      return res.status(400).json({ error: 'Eksik parametreler.' });
+    }
 
-    const result = rows.map(r => {
-      // 1) Kitaptan JSON dize ile gelen authors sütununu parse et
-      let authorsList = [];
-      if (r.authorsJson) {
-        try {
-          const parsed = JSON.parse(r.authorsJson);
-          if (Array.isArray(parsed)) authorsList = parsed;
-        } catch {}
-      }
-      // 2) Eğer hala boşsa favori kaydındaki tek yazarı kullan
-      if (!authorsList.length && r.favAuthor) {
-        authorsList = [r.favAuthor];
-      }
-      // 3) Hiç yoksa “Bilinmeyen yazar” fallback
-      if (!authorsList.length) {
-        authorsList = ['Bilinmeyen yazar'];
-      }
+    // 1) Kitabı ekle veya güncelle (upsert)
+    await db.promise().query(
+      `INSERT INTO books
+         (id, title, authors, thumbnail_url)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         title         = VALUES(title),
+         authors       = VALUES(authors),
+         thumbnail_url = VALUES(thumbnail_url)`,
+      [
+        bookId,
+        title,
+        JSON.stringify([author]), // JSON dizisi
+        thumbnailUrl
+      ]
+    );
 
-      return {
-        id:           r.id,
-        title:        r.title,
-        authors:      authorsList,
-        thumbnailUrl: r.thumbnailUrl || '',
-        publishedYear: r.publishedYear,
-        genre:        r.genre || '',
-        pageCount:    r.pageCount,
-        language:     r.language || '',
-        createdAt:    r.createdAt
-      };
-    });
+    // 2) Favorilere ekle veya güncelle
+    await db.promise().query(
+      `INSERT INTO favorites
+         (user_id, book_id, title, author, thumbnail_url)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         title         = VALUES(title),
+         author        = VALUES(author),
+         thumbnail_url = VALUES(thumbnail_url),
+         created_at    = CURRENT_TIMESTAMP`,
+      [userId, bookId, title, author, thumbnailUrl]
+    );
 
-    res.json(result);
+    return res.json({ message: 'Favori kaydedildi.' });
   } catch (err) {
-    console.error('GET /api/favorites error:', err);
-    res.status(500).json({ error: 'Sunucu hatası.' });
+    console.error('Favori kaydederken hata:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
 
@@ -267,71 +251,57 @@ app.get('/api/favorites/:userId', async (req, res) => {
     const { userId } = req.params;
     const sql = `
       SELECT
-        f.book_id       AS id,
-        f.title         AS title,
-        b.authors       AS authorsJson,
-        f.author        AS favAuthor,
-        b.thumbnail_url AS thumbnailUrl,
-        b.description,
-        b.publisher,
-        b.published_date   AS publishedDate,
-        b.page_count       AS pageCount,
-        b.industry_identifiers AS industryIdentifiers,
-        b.average_rating       AS averageRating,
-        b.ratings_count        AS ratingsCount,
-        f.created_at      AS createdAt
+        f.book_id        AS id,
+        f.title          AS title,
+        b.authors        AS authorsJson,
+        f.author         AS favAuthor,
+        b.thumbnail_url  AS thumbnailUrl,
+        b.published_year AS publishedYear,
+        b.genre          AS genre,
+        b.page_count     AS pageCount,
+        b.language       AS language,
+        f.created_at     AS createdAt
       FROM favorites f
-      JOIN books     b ON f.book_id = b.id
+      JOIN books b ON f.book_id = b.id
       WHERE f.user_id = ?
       ORDER BY f.created_at DESC
     `;
     const [rows] = await db.promise().query(sql, [userId]);
 
     const result = rows.map(r => {
-      // authors
-      let authorsList = [];
+      // 1) Kitaptan gelen JSON authors
+      let authors = [];
       if (r.authorsJson) {
-        try {
-          const parsed = JSON.parse(r.authorsJson);
-          if (Array.isArray(parsed)) authorsList = parsed;
-        } catch (_) {}
+        try { authors = JSON.parse(r.authorsJson) } catch {}
       }
-      if (!authorsList.length && r.favAuthor) {
-        authorsList = [r.favAuthor];
+      // 2) Hâlâ yoksa favori satırından tek yazarı al
+      if (!authors.length && r.favAuthor) {
+        authors = [r.favAuthor];
       }
-
-      // industryIdentifiers
-      let ids = [];
-      if (r.industryIdentifiers) {
-        try {
-          ids = JSON.parse(r.industryIdentifiers);
-        } catch (_) {}
+      // 3) Hiç yoksa fallback
+      if (!authors.length) {
+        authors = ['Bilinmeyen yazar'];
       }
 
       return {
-        id:               r.id,
-        title:            r.title,
-        authors:          authorsList.length ? authorsList : ['Bilinmeyen yazar'],
-        thumbnailUrl:     r.thumbnailUrl || '',
-        description:      r.description || '',
-        publisher:        r.publisher || '',
-        publishedDate:    r.publishedDate || '',
-        pageCount:        r.pageCount || 0,
-        industryIdentifiers: ids,
-        averageRating:    r.averageRating ?? null,
-        ratingsCount:     r.ratingsCount ?? 0,
-        // createdAt:      r.createdAt   // Book modelınızda yoksa atabilirsiniz
+        id:            r.id,
+        title:         r.title,
+        authors,
+        thumbnailUrl:  r.thumbnailUrl || '',
+        publishedYear: r.publishedYear,
+        genre:         r.genre || '',
+        pageCount:     r.pageCount,
+        language:      r.language || '',
+        createdAt:     r.createdAt
       };
     });
 
-    return res.json(result);
+    res.json(result);
   } catch (err) {
     console.error('GET /api/favorites error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
+    res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
-
 
 app.post('/api/favorite-to-library', async (req, res) => {
   try {
