@@ -405,18 +405,18 @@ app.get('/api/library/:userId', async (req, res) => {
     const { userId } = req.params;
     const sql = `
       SELECT
-        l.book_id      AS id,
-        l.title        AS title,
-        l.author       AS author,
-        l.genre        AS genre,
-        l.thumbnail_url AS thumbnailUrl,
-        l.added_at     AS addedAt,
-        b.authors      AS authorsJson,
-        b.published_year   AS publishedYear,
-        b.publisher        AS publisher,
-        b.published_date   AS publishedDate,
-        b.page_count       AS pageCount,
-        b.language         AS language
+        l.book_id        AS id,
+        l.title          AS title,
+        l.author         AS libAuthor,
+        l.genre          AS genre,
+        b.thumbnail_url  AS thumbnailUrl,
+        l.added_at       AS addedAt,
+        b.authors        AS authorsJson,
+        b.published_year AS publishedYear,
+        b.publisher      AS publisher,
+        b.published_date AS publishedDate,
+        b.page_count     AS pageCount,
+        b.language       AS language
       FROM librarys l
       JOIN books    b ON l.book_id = b.id
       WHERE l.user_id = ?
@@ -424,27 +424,28 @@ app.get('/api/library/:userId', async (req, res) => {
     `;
     const [rows] = await db.promise().query(sql, [userId]);
 
-    // JSON authors dizisini parse et, yoksa fallback olarak l.author
     const result = rows.map(r => {
+      // 1) books.authors JSON dizisi varsa parse et
       let authors = [];
       if (r.authorsJson) {
         try { authors = JSON.parse(r.authorsJson); } catch (_) {}
       }
-      if (!authors.length && r.author) authors = [r.author];
-      if (!authors.length)           authors = ['Bilinmeyen yazar'];
+      // 2) Yoksa librarys.author sütununa düş
+      if (!authors.length && r.libAuthor) authors = [r.libAuthor];
+      // 3) Hâlâ yoksa bilinmeyen yazar
+      if (!authors.length) authors = ['Bilinmeyen yazar'];
 
       return {
         id:            r.id,
         title:         r.title,
-        authors, 
-        author:        r.author,
+        authors,                     // artık dizi geliyor
         thumbnailUrl:  r.thumbnailUrl || '',
         genre:         r.genre || '',
         publishedYear: r.publishedYear || null,
-        publisher:     r.publisher     || '',
-        publishedDate: r.publishedDate || null,
-        pageCount:     r.pageCount     || 0,
-        language:      r.language      || '',
+        publisher:     r.publisher    || '',
+        publishedDate: r.publishedDate|| null,
+        pageCount:     r.pageCount    || 0,
+        language:      r.language     || '',
         addedAt:       r.addedAt
       };
     });
@@ -455,7 +456,6 @@ app.get('/api/library/:userId', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
 
 // 2) Kütüphaneden kitap sil
 app.post('/api/library/remove', async (req, res) => {
