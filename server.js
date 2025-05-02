@@ -200,29 +200,66 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
 // -------------------------
 app.post('/api/favorites/save', async (req, res) => {
   try {
-    const { userId, bookId, title, author, thumbnailUrl } = req.body;
+    const {
+      userId,
+      bookId,
+      title,
+      authors,              // dizi: ["Yazar1","Yazar2"]
+      thumbnailUrl,
+      description,
+      publisher,
+      publishedDate,        // örn. "2022-07-15"
+      pageCount,
+      genre,
+      language,
+      industryIdentifiers,  // dizi: [{ type, identifier }, …]
+      averageRating,
+      ratingsCount
+    } = req.body;
+
     if (!userId || !bookId || !title) {
-      return res.status(400).json({ error: 'Eksik parametreler.' });
+      return res.status(400).json({ error: 'userId, bookId ve title zorunlu.' });
     }
 
-    // 1) Kitabı ekle veya güncelle (upsert)
+    // 1) Kitabı books tablosuna ekle veya güncelle
     await db.promise().query(
       `INSERT INTO books
-         (id, title, authors, thumbnail_url)
-       VALUES (?, ?, ?, ?)
+         (id, title, authors, thumbnail_url,
+          description, publisher, published_year,
+          page_count, genre, language,
+          industry_identifiers, average_rating, ratings_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         title         = VALUES(title),
-         authors       = VALUES(authors),
-         thumbnail_url = VALUES(thumbnail_url)`,
+         title                = VALUES(title),
+         authors              = VALUES(authors),
+         thumbnail_url        = VALUES(thumbnail_url),
+         description          = VALUES(description),
+         publisher            = VALUES(publisher),
+         published_year       = VALUES(published_year),
+         page_count           = VALUES(page_count),
+         genre                = VALUES(genre),
+         language             = VALUES(language),
+         industry_identifiers = VALUES(industry_identifiers),
+         average_rating       = VALUES(average_rating),
+         ratings_count        = VALUES(ratings_count)`,
       [
         bookId,
         title,
-        JSON.stringify([author]), // JSON dizisi
-        thumbnailUrl
+        JSON.stringify(authors),
+        thumbnailUrl       || '',
+        description        || '',
+        publisher          || '',
+        publishedDate      || null,
+        pageCount          || null,
+        genre              || '',
+        language           || '',
+        JSON.stringify(industryIdentifiers || []),
+        averageRating      || null,
+        ratingsCount       || 0
       ]
     );
 
-    // 2) Favorilere ekle veya güncelle
+    // 2) favorites tablosuna ekle veya güncelle
     await db.promise().query(
       `INSERT INTO favorites
          (user_id, book_id, title, author, thumbnail_url)
@@ -232,7 +269,14 @@ app.post('/api/favorites/save', async (req, res) => {
          author        = VALUES(author),
          thumbnail_url = VALUES(thumbnail_url),
          created_at    = CURRENT_TIMESTAMP`,
-      [userId, bookId, title, author, thumbnailUrl]
+      [
+        userId,
+        bookId,
+        title,
+        // favorites.author tek bir string tuttuğun için ilk author’ı alıyoruz:
+        Array.isArray(authors) ? authors[0] : author,
+        thumbnailUrl || ''
+      ]
     );
 
     return res.json({ message: 'Favori kaydedildi.' });
@@ -241,7 +285,6 @@ app.post('/api/favorites/save', async (req, res) => {
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
 
 // ---------------------------------------
 // GET /api/favorites/:userId  (tek kopya!)
