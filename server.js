@@ -286,6 +286,22 @@ app.post('/api/favorites/save', async (req, res) => {
   }
 });
 
+app.post('/api/favorites/remove', async (req, res) => {
+  const { userId, bookId } = req.body;
+  if (!userId || !bookId) return res.status(400).json({ error: 'userId ve bookId gerekli.' });
+  try {
+    await db.promise().query(
+      'DELETE FROM favorites WHERE user_id = ? AND book_id = ?', 
+      [userId, bookId]
+    );
+    res.json({ message: 'Favori silindi.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+
 // ---------------------------------------
 // GET /api/favorites/:userId  (tek kopya!)
 // ---------------------------------------
