@@ -399,7 +399,7 @@ app.post('/api/favorite-to-library', async (req, res) => {
   }
 });
 
-// GET /api/library/:userId — kullanıcının kütüphanesini döner
+// 1) Kullanıcının kütüphanesini getir
 app.get('/api/library/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -412,38 +412,39 @@ app.get('/api/library/:userId', async (req, res) => {
         l.thumbnail_url AS thumbnailUrl,
         l.added_at     AS addedAt,
         b.authors      AS authorsJson,
-        b.published_year AS publishedYear,
-        b.publisher      AS publisher,
-        b.description    AS description,
-        b.page_count     AS pageCount,
-        b.language       AS language
+        b.published_year   AS publishedYear,
+        b.publisher        AS publisher,
+        b.published_date   AS publishedDate,
+        b.page_count       AS pageCount,
+        b.language         AS language
       FROM librarys l
-      JOIN books   b ON l.book_id = b.id
+      JOIN books    b ON l.book_id = b.id
       WHERE l.user_id = ?
       ORDER BY l.added_at DESC
     `;
     const [rows] = await db.promise().query(sql, [userId]);
 
+    // JSON authors dizisini parse et, yoksa fallback olarak l.author
     const result = rows.map(r => {
       let authors = [];
       if (r.authorsJson) {
         try { authors = JSON.parse(r.authorsJson); } catch (_) {}
       }
-      // fallback
       if (!authors.length && r.author) authors = [r.author];
-      if (!authors.length) authors = ['Bilinmeyen yazar'];
+      if (!authors.length)           authors = ['Bilinmeyen yazar'];
 
       return {
         id:            r.id,
         title:         r.title,
-        authors,
+        authors, 
+        author:        r.author,
         thumbnailUrl:  r.thumbnailUrl || '',
         genre:         r.genre || '',
-        description:   r.description || '',
-        publisher:     r.publisher || '',
         publishedYear: r.publishedYear || null,
-        pageCount:     r.pageCount || 0,
-        language:      r.language || '',
+        publisher:     r.publisher     || '',
+        publishedDate: r.publishedDate || null,
+        pageCount:     r.pageCount     || 0,
+        language:      r.language      || '',
         addedAt:       r.addedAt
       };
     });
@@ -451,6 +452,25 @@ app.get('/api/library/:userId', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('GET /api/library error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+
+// 2) Kütüphaneden kitap sil
+app.post('/api/library/remove', async (req, res) => {
+  const { userId, bookId } = req.body;
+  if (!userId || !bookId) {
+    return res.status(400).json({ error: 'userId ve bookId gerekli.' });
+  }
+  try {
+    await db.promise().query(
+      'DELETE FROM librarys WHERE user_id = ? AND book_id = ?',
+      [userId, bookId]
+    );
+    res.json({ message: 'Kütüphaneden çıkarıldı.' });
+  } catch (err) {
+    console.error('POST /api/library/remove error:', err);
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
