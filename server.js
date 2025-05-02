@@ -258,6 +258,8 @@ app.get('/api/favorites/:userId', async (req, res) => {
         f.author         AS favAuthor,
         b.thumbnail_url  AS thumbnailUrl,
         b.published_year AS publishedYear,
+        b.publisher      AS publisher,
+        b.published_date AS publishedDate,
         b.genre          AS genre,
         b.page_count     AS pageCount,
         b.language       AS language,
@@ -270,29 +272,32 @@ app.get('/api/favorites/:userId', async (req, res) => {
     const [rows] = await db.promise().query(sql, [userId]);
 
     const result = rows.map(r => {
-      // 1) JSON.parse ile books.authors
+      // authors JSON dizisini parse et
       let authors = [];
       if (r.authorsJson) {
         try { authors = JSON.parse(r.authorsJson); } catch (_) {}
       }
-      // 2) Fallback olarak favorites.author
+      // boşsa favori tablosundaki tek yazarı al
       if (!authors.length && r.favAuthor) {
         authors = [r.favAuthor];
       }
-      // 3) Hiç yoksa
+      // hâlâ yoksa default
       if (!authors.length) {
         authors = ['Bilinmeyen yazar'];
       }
+
       return {
-        id:            r.id,
-        title:         r.title,
-        authors,
-        thumbnailUrl:  r.thumbnailUrl || '',
-        publishedYear: r.publishedYear,
-        genre:         r.genre || '',
-        pageCount:     r.pageCount,
-        language:      r.language || '',
-        createdAt:     r.createdAt
+        id:             r.id,
+        title:          r.title,
+        authors,        // dizi
+        thumbnailUrl:   r.thumbnailUrl  || '',
+        publishedYear:  r.publishedYear || null,
+        publisher:      r.publisher     || '',
+        publishedDate:  r.publishedDate || null,
+        genre:          r.genre         || '',
+        pageCount:      r.pageCount     || 0,
+        language:       r.language      || '',
+        createdAt:      r.createdAt
       };
     });
 
@@ -302,6 +307,7 @@ app.get('/api/favorites/:userId', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+
 
 app.post('/api/favorite-to-library', async (req, res) => {
   try {
