@@ -246,6 +246,7 @@ app.post('/api/favorites/save', async (req, res) => {
 // ---------------------------------------
 // GET /api/favorites/:userId  (tek kopya!)
 // ---------------------------------------
+// --- server.js içinde, diğer kodlardan sonra tek seferlik ekleyin ---
 app.get('/api/favorites/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -269,20 +270,19 @@ app.get('/api/favorites/:userId', async (req, res) => {
     const [rows] = await db.promise().query(sql, [userId]);
 
     const result = rows.map(r => {
-      // 1) Kitaptan gelen JSON authors
+      // 1) JSON.parse ile books.authors
       let authors = [];
       if (r.authorsJson) {
-        try { authors = JSON.parse(r.authorsJson) } catch {}
+        try { authors = JSON.parse(r.authorsJson); } catch (_) {}
       }
-      // 2) Hâlâ yoksa favori satırından tek yazarı al
+      // 2) Fallback olarak favorites.author
       if (!authors.length && r.favAuthor) {
         authors = [r.favAuthor];
       }
-      // 3) Hiç yoksa fallback
+      // 3) Hiç yoksa
       if (!authors.length) {
         authors = ['Bilinmeyen yazar'];
       }
-
       return {
         id:            r.id,
         title:         r.title,
