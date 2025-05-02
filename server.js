@@ -204,15 +204,15 @@ app.post('/api/favorites/save', async (req, res) => {
       userId,
       bookId,
       title,
-      authors,
+      authors,              // dizi: ["Yazar1","Yazar2"]
       thumbnailUrl,
       description,
       publisher,
-      publishedDate,    // "YYYY-MM-DD" veya null
+      publishedDate,        // örn. "2022-07-15"
       pageCount,
       genre,
       language,
-      industryIdentifiers,
+      industryIdentifiers,  // dizi: [{ type, identifier }, …]
       averageRating,
       ratingsCount
     } = req.body;
@@ -221,42 +221,35 @@ app.post('/api/favorites/save', async (req, res) => {
       return res.status(400).json({ error: 'userId, bookId ve title zorunlu.' });
     }
 
-    // → Burada tam tarihten sadece yılı alıyoruz:
-    const publishedYear = publishedDate
-      ? parseInt(publishedDate.split('-')[0], 10)
-      : null;
-
-    // 1) Kitabı ekle veya güncelle (upsert)
+    // 1) Kitabı books tablosuna ekle veya güncelle
     await db.promise().query(
       `INSERT INTO books
          (id, title, authors, thumbnail_url,
-          description, publisher, published_year, published_date,
+          description, publisher, published_year,
           page_count, genre, language,
           industry_identifiers, average_rating, ratings_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         title              = VALUES(title),
-         authors            = VALUES(authors),
-         thumbnail_url      = VALUES(thumbnail_url),
-         description        = VALUES(description),
-         publisher          = VALUES(publisher),
-         published_year     = VALUES(published_year),
-         published_date     = VALUES(published_date),
-         page_count         = VALUES(page_count),
-         genre              = VALUES(genre),
-         language           = VALUES(language),
+         title                = VALUES(title),
+         authors              = VALUES(authors),
+         thumbnail_url        = VALUES(thumbnail_url),
+         description          = VALUES(description),
+         publisher            = VALUES(publisher),
+         published_year       = VALUES(published_year),
+         page_count           = VALUES(page_count),
+         genre                = VALUES(genre),
+         language             = VALUES(language),
          industry_identifiers = VALUES(industry_identifiers),
-         average_rating     = VALUES(average_rating),
-         ratings_count      = VALUES(ratings_count)`,
+         average_rating       = VALUES(average_rating),
+         ratings_count        = VALUES(ratings_count)`,
       [
         bookId,
         title,
-        JSON.stringify(authors || []),
+        JSON.stringify(authors),
         thumbnailUrl       || '',
         description        || '',
         publisher          || '',
-        publishedYear,             // sadece yıl (INT)
-        publishedDate      || null, // tam tarih (DATE)
+        publishedDate      || null,
         pageCount          || null,
         genre              || '',
         language           || '',
@@ -266,7 +259,25 @@ app.post('/api/favorites/save', async (req, res) => {
       ]
     );
 
-    // … favorites ekleme bloğu aynı kalabilir …
+    // 2) favorites tablosuna ekle veya güncelle
+    await db.promise().query(
+      `INSERT INTO favorites
+         (user_id, book_id, title, author, thumbnail_url)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         title         = VALUES(title),
+         author        = VALUES(author),
+         thumbnail_url = VALUES(thumbnail_url),
+         created_at    = CURRENT_TIMESTAMP`,
+      [
+        userId,
+        bookId,
+        title,
+        // favorites.author tek bir string tuttuğun için ilk author’ı alıyoruz:
+        Array.isArray(authors) ? authors[0] : author,
+        thumbnailUrl || ''
+      ]
+    );
 
     return res.json({ message: 'Favori kaydedildi.' });
   } catch (err) {
@@ -274,24 +285,6 @@ app.post('/api/favorites/save', async (req, res) => {
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
-
-// DELETE /api/favorites
-app.delete('/api/favorites/:userId/:bookId', async (req, res) => {
-  try {
-    const { userId, bookId } = req.params;
-    await db.promise().query(
-      'DELETE FROM favorites WHERE user_id = ? AND book_id = ?',
-      [userId, bookId]
-    );
-    return res.json({ message: 'Favoriden çıkarıldı.' });
-  } catch (err) {
-    console.error('Favoriden çıkartırken hata:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-});
-
-
 
 // ---------------------------------------
 // GET /api/favorites/:userId  (tek kopya!)
