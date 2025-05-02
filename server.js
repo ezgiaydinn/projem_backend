@@ -400,6 +400,7 @@ app.post('/api/favorite-to-library', async (req, res) => {
 });
 
 // 1) Kullanıcının kütüphanesini getir
+// GET /api/library/:userId
 app.get('/api/library/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -425,27 +426,31 @@ app.get('/api/library/:userId', async (req, res) => {
     const [rows] = await db.promise().query(sql, [userId]);
 
     const result = rows.map(r => {
-      // 1) books.authors JSON dizisi varsa parse et
+      // 1) Kitap tablosundaki JSON authors dizisini parse et
       let authors = [];
       if (r.authorsJson) {
         try { authors = JSON.parse(r.authorsJson); } catch (_) {}
       }
-      // 2) Yoksa librarys.author sütununa düş
-      if (!authors.length && r.libAuthor) authors = [r.libAuthor];
-      // 3) Hâlâ yoksa bilinmeyen yazar
-      if (!authors.length) authors = ['Bilinmeyen yazar'];
+      // 2) Eğer halen boşsa librarys.author sütununu kullan
+      if (!authors.length && r.libAuthor) {
+        authors = [r.libAuthor];
+      }
+      // 3) Hiç yazar yoksa fallback
+      if (!authors.length) {
+        authors = ['Bilinmeyen yazar'];
+      }
 
       return {
         id:            r.id,
         title:         r.title,
-        authors,                     // artık dizi geliyor
-        thumbnailUrl:  r.thumbnailUrl || '',
-        genre:         r.genre || '',
+        authors,                      // artık List<String>
+        thumbnailUrl:  r.thumbnailUrl  || '',
+        genre:         r.genre         || '',
         publishedYear: r.publishedYear || null,
-        publisher:     r.publisher    || '',
-        publishedDate: r.publishedDate|| null,
-        pageCount:     r.pageCount    || 0,
-        language:      r.language     || '',
+        publisher:     r.publisher     || '',
+        publishedDate: r.publishedDate || null,
+        pageCount:     r.pageCount     || 0,
+        language:      r.language      || '',
         addedAt:       r.addedAt
       };
     });
@@ -456,6 +461,7 @@ app.get('/api/library/:userId', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+
 
 // 2) Kütüphaneden kitap sil
 app.post('/api/library/remove', async (req, res) => {
