@@ -269,15 +269,17 @@ app.get('/api/favorites/:userId', async (req, res) => {
     const [rows] = await db.promise().query(sql, [userId]);
 
     const result = rows.map(r => {
-      // JSON.parse authors
-      List<String> authors = [];
+      // 1) Kitaptan gelen JSON authors
+      let authors = [];
       if (r.authorsJson) {
-        try { authors = JSON.parse(r.authorsJson); } catch (_) {}
+        try { authors = JSON.parse(r.authorsJson) } catch {}
       }
-      if (authors.isEmpty && r.favAuthor) {
+      // 2) Hâlâ yoksa favori satırından tek yazarı al
+      if (!authors.length && r.favAuthor) {
         authors = [r.favAuthor];
       }
-      if (authors.isEmpty) {
+      // 3) Hiç yoksa fallback
+      if (!authors.length) {
         authors = ['Bilinmeyen yazar'];
       }
 
@@ -300,7 +302,6 @@ app.get('/api/favorites/:userId', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
 
 app.post('/api/favorite-to-library', async (req, res) => {
   try {
