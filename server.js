@@ -1,38 +1,50 @@
+// ---------------------------  server.js  ---------------------------
 const express = require('express');
 
-//const multer = require("multer");
-//const path = require("path");
+// const multer = require("multer");
+// const path   = require("path");
 const bodyParser = require('body-parser');
-const cors = require('cors');
-const router = express.Router();
-const app = express();
+const cors       = require('cors');
+const router     = express.Router();
+const app        = express();
+
 app.use(cors());
 app.use(bodyParser.json());
 
-// MySQL bağlantısı
+// ---------------- MySQL bağlantısı ----------------
 const mysql = require('mysql2');
-require('dotenv').config(); 
+require('dotenv').config();
 
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,      
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
+// ►►► TEKİL createConnection yerine H A V U Z ◄◄◄
+const db = mysql.createPool({
+  host:     process.env.DB_HOST,
+  port:     process.env.DB_PORT || 3306,
+  user:     process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  multipleStatements: true
+  multipleStatements: true,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  enableKeepAlive: true,      // Railway idle-timeout’a karşı
+  keepAliveInitialDelay: 10000
 });
 
-
+/* -------------- legacy: eskiden böyleydi --------------
 db.connect((err) => {
-  if (err) {
-    console.error('MySQL bağlantı hatası:', err);
-    return;
-  }
+  if (err) { console.error('MySQL bağlantı hatası:', err); return; }
   console.log('✅ MySQL bağlantısı kuruldu.');
 });
+-------------------------------------------------------- */
+
+// ➜ Havuzun hazır olup olmadığını tek satır PING ile gösterelim
+db.query('SELECT 1', (err) => {
+  if (err) console.error('MySQL havuzu açılamadı:', err);
+  else     console.log('✅ MySQL havuzu hazır.');
+});
 
 
-// Login Route
+// -------------------- Login Route --------------------
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
 
@@ -48,23 +60,18 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     if (results.length > 0) {
-      // Kullanıcı bulunduysa başarı cevabı dön
       return res.status(200).json({
         message: 'Giriş başarılı!',
-        user: {
-          id: results[0].id,
-          name: results[0].name,
-          email: results[0].email
-        }
+        user: { id: results[0].id, name: results[0].name, email: results[0].email }
       });
     } else {
-      // Kullanıcı bulunamadıysa hata dön
       return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
     }
   });
 });
 
-// Signup Route
+
+// -------------------- Signup Route -------------------
 app.post('/api/auth/signup', (req, res) => {
   const { name, email, password } = req.body;
 
@@ -72,7 +79,6 @@ app.post('/api/auth/signup', (req, res) => {
     return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
   }
 
-  // Önce aynı email var mı kontrol et
   const checkUserSql = 'SELECT * FROM users WHERE email = ?';
   db.query(checkUserSql, [email], (err, results) => {
     if (err) {
@@ -81,13 +87,11 @@ app.post('/api/auth/signup', (req, res) => {
     }
 
     if (results.length > 0) {
-      // Aynı email zaten kayıtlıysa hata döndür
       return res.status(409).json({ error: 'Bu e-posta zaten kullanılıyor.' });
     }
 
-    // Email kullanılmıyorsa yeni kullanıcı ekle
     const insertUserSql = 'INSERT INTO users (name, email, password) VALUES (?, ?, ?)';
-    db.query(insertUserSql, [name, email, password], (err, result) => {
+    db.query(insertUserSql, [name, email, password], (err) => {
       if (err) {
         console.error('Kayıt hatası:', err);
         return res.status(500).json({ error: 'Kayıt yapılamadı.' });
@@ -97,7 +101,8 @@ app.post('/api/auth/signup', (req, res) => {
   });
 });
 
-// Kullanıcının puan verilerini döner
+
+// ----------- Kullanıcının puan verilerini döner -----------
 app.get('/api/ratings/:userId', async (req, res) => {
   const { userId } = req.params;
   const sql = `
@@ -115,10 +120,9 @@ app.get('/api/ratings/:userId', async (req, res) => {
 });
 
 
-// Profile Route
+// ------------------- Profile Route -------------------
 app.get('/api/auth/profile/:userId', (req, res) => {
   const { userId } = req.params;
-
   const sql = 'SELECT id, name, email FROM users WHERE id = ?';
 
   db.query(sql, [userId], (err, results) => {
@@ -128,17 +132,15 @@ app.get('/api/auth/profile/:userId', (req, res) => {
     }
 
     if (results.length > 0) {
-      // Kullanıcı bulundu
-      const user = results[0];
-      return res.status(200).json({ user });
+      return res.status(200).json({ user: results[0] });
     } else {
-      // Kullanıcı bulunamadı
       return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     }
   });
 });
 
-// update profil route
+
+// --------------- Update profil route ------------------
 app.put('/api/auth/updateProfile', (req, res) => {
   const { userId, field, value } = req.body;
 
@@ -152,7 +154,7 @@ app.put('/api/auth/updateProfile', (req, res) => {
   }
 
   const sql = `UPDATE users SET ${field} = ? WHERE id = ?`;
-  db.query(sql, [value, userId], (err, result) => {
+  db.query(sql, [value, userId], (err) => {
     if (err) {
       console.error('Bilgi güncelleme hatası:', err);
       return res.status(500).json({ error: 'Sunucu hatası.' });
@@ -161,32 +163,30 @@ app.put('/api/auth/updateProfile', (req, res) => {
   });
 });
 
-const multer = require('multer');
-const path = require('path');
 
-// Fotoğraf yüklemek için multer ayarları
+// ------------------- Profil fotoğrafı ------------------
+const multer = require('multer');
+const path   = require('path');
+
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // uploads klasörüne kaydedilecek
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, unique + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
-// upload profil image
 app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
   const { userId } = req.body;
-  const imagePath = req.file.path;
+  const imagePath  = req.file?.path;
 
-  if (!userId || !req.file) {
+  if (!userId || !imagePath) {
     return res.status(400).json({ error: 'Eksik veri veya dosya gönderildi.' });
   }
 
   const sql = 'UPDATE users SET profile_image = ? WHERE id = ?';
-  db.query(sql, [imagePath, userId], (err, result) => {
+  db.query(sql, [imagePath, userId], (err) => {
     if (err) {
       console.error('Profil fotoğrafı yükleme hatası:', err);
       return res.status(500).json({ error: 'Sunucu hatası.' });
@@ -195,33 +195,21 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
   });
 });
 
-// -------------------------
-// POST /api/favorites/save
-// -------------------------
+
+// -------------------- FAVORITES ------------------------
 app.post('/api/favorites/save', async (req, res) => {
   try {
     const {
-      userId,
-      bookId,
-      title,
-      authors,              // dizi: ["Yazar1","Yazar2"]
-      thumbnailUrl,
-      description,
-      publisher,
-      publishedDate,        // örn. "2022-07-15"
-      pageCount,
-      genre,
-      language,
-      industryIdentifiers,  // dizi: [{ type, identifier }, …]
-      averageRating,
-      ratingsCount
+      userId, bookId, title, authors,
+      thumbnailUrl, description, publisher,
+      publishedDate, pageCount, genre, language,
+      industryIdentifiers, averageRating, ratingsCount
     } = req.body;
 
     if (!userId || !bookId || !title) {
       return res.status(400).json({ error: 'userId, bookId ve title zorunlu.' });
     }
 
-    // 1) Kitabı books tablosuna ekle veya güncelle
     await db.promise().query(
       `INSERT INTO books
          (id, title, authors, thumbnail_url,
@@ -246,20 +234,19 @@ app.post('/api/favorites/save', async (req, res) => {
         bookId,
         title,
         JSON.stringify(authors),
-        thumbnailUrl       || '',
-        description        || '',
-        publisher          || '',
-        publishedDate      || null,
-        pageCount          || null,
-        genre              || '',
-        language           || '',
+        thumbnailUrl || '',
+        description  || '',
+        publisher    || '',
+        publishedDate|| null,
+        pageCount    || null,
+        genre        || '',
+        language     || '',
         JSON.stringify(industryIdentifiers || []),
-        averageRating      || null,
-        ratingsCount       || 0
+        averageRating|| null,
+        ratingsCount || 0
       ]
     );
 
-    // 2) favorites tablosuna ekle veya güncelle
     await db.promise().query(
       `INSERT INTO favorites
          (user_id, book_id, title, author, thumbnail_url)
@@ -273,7 +260,6 @@ app.post('/api/favorites/save', async (req, res) => {
         userId,
         bookId,
         title,
-        // favorites.author tek bir string tuttuğun için ilk author’ı alıyoruz:
         Array.isArray(authors) ? authors[0] : author,
         thumbnailUrl || ''
       ]
@@ -288,10 +274,12 @@ app.post('/api/favorites/save', async (req, res) => {
 
 app.post('/api/favorites/remove', async (req, res) => {
   const { userId, bookId } = req.body;
-  if (!userId || !bookId) return res.status(400).json({ error: 'userId ve bookId gerekli.' });
+  if (!userId || !bookId) {
+    return res.status(400).json({ error: 'userId ve bookId gerekli.' });
+  }
   try {
     await db.promise().query(
-      'DELETE FROM favorites WHERE user_id = ? AND book_id = ?', 
+      'DELETE FROM favorites WHERE user_id = ? AND book_id = ?',
       [userId, bookId]
     );
     res.json({ message: 'Favori silindi.' });
@@ -301,11 +289,6 @@ app.post('/api/favorites/remove', async (req, res) => {
   }
 });
 
-
-// ---------------------------------------
-// GET /api/favorites/:userId  (tek kopya!)
-// ---------------------------------------
-// --- server.js içinde, diğer kodlardan sonra tek seferlik ekleyin ---
 app.get('/api/favorites/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -331,32 +314,25 @@ app.get('/api/favorites/:userId', async (req, res) => {
     const [rows] = await db.promise().query(sql, [userId]);
 
     const result = rows.map(r => {
-      // authors JSON dizisini parse et
       let authors = [];
       if (r.authorsJson) {
         try { authors = JSON.parse(r.authorsJson); } catch (_) {}
       }
-      // boşsa favori tablosundaki tek yazarı al
-      if (!authors.length && r.favAuthor) {
-        authors = [r.favAuthor];
-      }
-      // hâlâ yoksa default
-      if (!authors.length) {
-        authors = ['Bilinmeyen yazar'];
-      }
+      if (!authors.length && r.favAuthor) authors = [r.favAuthor];
+      if (!authors.length) authors = ['Bilinmeyen yazar'];
 
       return {
-        id:             r.id,
-        title:          r.title,
-        authors,        // dizi
-        thumbnailUrl:   r.thumbnailUrl  || '',
-        publishedYear:  r.publishedYear || null,
-        publisher:      r.publisher     || '',
-        publishedDate:  r.publishedDate || null,
-        genre:          r.genre         || '',
-        pageCount:      r.pageCount     || 0,
-        language:       r.language      || '',
-        createdAt:      r.createdAt
+        id:            r.id,
+        title:         r.title,
+        authors,
+        thumbnailUrl:  r.thumbnailUrl || '',
+        publishedYear: r.publishedYear || null,
+        publisher:     r.publisher || '',
+        publishedDate: r.publishedDate || null,
+        genre:         r.genre || '',
+        pageCount:     r.pageCount || 0,
+        language:      r.language || '',
+        createdAt:     r.createdAt
       };
     });
 
@@ -368,6 +344,7 @@ app.get('/api/favorites/:userId', async (req, res) => {
 });
 
 
+// -------------- Favorite → Library taşıma --------------
 app.post('/api/favorite-to-library', async (req, res) => {
   try {
     const { userId, bookId } = req.body;
@@ -375,22 +352,17 @@ app.post('/api/favorite-to-library', async (req, res) => {
       return res.status(400).json({ error: 'userId ve bookId gerekli.' });
     }
 
-    // 1) librarys tablosuna ekle (yoksa güncelle):
     const insertLibSql = `
       INSERT INTO librarys (user_id, book_id, title)
-      SELECT ?, b.id, b.title
-      FROM books b
-      WHERE b.id = ?
+      SELECT ?, b.id, b.title FROM books b WHERE b.id = ?
       ON DUPLICATE KEY UPDATE added_at = CURRENT_TIMESTAMP
     `;
-    await db.promise().query(insertLibSql, [ userId, bookId ]);
+    await db.promise().query(insertLibSql, [userId, bookId]);
 
-    // 2) favorites tablosundan sil
-    const deleteFavSql = `
-      DELETE FROM favorites
-      WHERE user_id = ? AND book_id = ?
-    `;
-    await db.promise().query(deleteFavSql, [ userId, bookId ]);
+    await db.promise().query(
+      'DELETE FROM favorites WHERE user_id = ? AND book_id = ?',
+      [userId, bookId]
+    );
 
     return res.status(200).json({ message: 'Kitap kütüphaneye taşındı.' });
   } catch (err) {
@@ -399,8 +371,8 @@ app.post('/api/favorite-to-library', async (req, res) => {
   }
 });
 
-// 1) Kullanıcının kütüphanesini getir
-// GET /api/library/:userId
+
+// -------------------- LIBRARY -------------------------
 app.get('/api/library/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -419,38 +391,31 @@ app.get('/api/library/:userId', async (req, res) => {
         b.page_count     AS pageCount,
         b.language       AS language
       FROM librarys l
-      JOIN books    b ON l.book_id = b.id
+      JOIN books b ON l.book_id = b.id
       WHERE l.user_id = ?
       ORDER BY l.added_at DESC
     `;
     const [rows] = await db.promise().query(sql, [userId]);
 
     const result = rows.map(r => {
-      // 1) Kitap tablosundaki JSON authors dizisini parse et
       let authors = [];
       if (r.authorsJson) {
         try { authors = JSON.parse(r.authorsJson); } catch (_) {}
       }
-      // 2) Eğer halen boşsa librarys.author sütununu kullan
-      if (!authors.length && r.libAuthor) {
-        authors = [r.libAuthor];
-      }
-      // 3) Hiç yazar yoksa fallback
-      if (!authors.length) {
-        authors = ['Bilinmeyen yazar'];
-      }
+      if (!authors.length && r.libAuthor) authors = [r.libAuthor];
+      if (!authors.length) authors = ['Bilinmeyen yazar'];
 
       return {
         id:            r.id,
         title:         r.title,
-        authors,                      // artık List<String>
-        thumbnailUrl:  r.thumbnailUrl  || '',
-        genre:         r.genre         || '',
+        authors,
+        thumbnailUrl:  r.thumbnailUrl || '',
+        genre:         r.genre || '',
         publishedYear: r.publishedYear || null,
-        publisher:     r.publisher     || '',
+        publisher:     r.publisher || '',
         publishedDate: r.publishedDate || null,
-        pageCount:     r.pageCount     || 0,
-        language:      r.language      || '',
+        pageCount:     r.pageCount || 0,
+        language:      r.language || '',
         addedAt:       r.addedAt
       };
     });
@@ -462,8 +427,6 @@ app.get('/api/library/:userId', async (req, res) => {
   }
 });
 
-
-// 2) Kütüphaneden kitap sil
 app.post('/api/library/remove', async (req, res) => {
   const { userId, bookId } = req.body;
   if (!userId || !bookId) {
@@ -482,8 +445,8 @@ app.post('/api/library/remove', async (req, res) => {
 });
 
 
-// // Server başlat
- const PORT = 3000;
- app.listen(PORT,'0.0.0.0', () => {
- console.log(`🚀 Sunucu ${PORT} portunda çalışıyorrr`);
- });
+// ----------------- Sunucuyu başlat --------------------
+const PORT = 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Sunucu ${PORT} portunda çalışıyorrr`);
+});
