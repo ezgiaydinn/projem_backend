@@ -202,7 +202,7 @@ app.post('/api/favorites/save', async (req, res) => {
     const {
       userId, bookId, title, authors,
       thumbnailUrl, description, publisher,
-      publishedDate, pageCount, genre, language,
+      publishedDate, pageCount, categories = [], language,
       industryIdentifiers, averageRating, ratingsCount
     } = req.body;
 
@@ -239,7 +239,9 @@ app.post('/api/favorites/save', async (req, res) => {
         publisher    || '',
         publishedDate|| null,
         pageCount    || null,
-        genre        || '',
+        Array.isArray(categories) && categories.length > 0
+            ? categories[0]
+            : '',
         language     || '',
         JSON.stringify(industryIdentifiers || []),
         averageRating|| null,
