@@ -356,13 +356,13 @@ app.post('/api/favorite-to-library', async (req, res) => {
       INSERT INTO librarys
         (user_id, book_id, title,
          author, genre, thumbnail_url,
-         description, publisher, published_year,
+         publisher, published_year,
          page_count)
       SELECT
         ?, b.id, b.title,
         JSON_UNQUOTE(JSON_EXTRACT(b.authors, '$[0]')),
         b.genre, b.thumbnail_url,
-        b.description, b.publisher, b.published_year,
+        b.publisher, b.published_year,
         b.page_count
       FROM books b
       WHERE b.id = ?
@@ -372,7 +372,6 @@ app.post('/api/favorite-to-library', async (req, res) => {
         author        = VALUES(author),
         genre         = VALUES(genre),
         thumbnail_url = VALUES(thumbnail_url),
-        description   = VALUES(description),
         publisher     = VALUES(publisher),
         published_year= VALUES(published_year),
         page_count    = VALUES(page_count)
