@@ -355,15 +355,12 @@ app.post('/api/favorite-to-library', async (req, res) => {
     const insertLibSql = `
       INSERT INTO librarys
         (user_id, book_id, title,
-         author, genre, thumbnail_url,
-         publisher, published_year,
-         page_count)
+         author, genre, thumbnail_url)
       SELECT
         ?, b.id, b.title,
         JSON_UNQUOTE(JSON_EXTRACT(b.authors, '$[0]')),
-        b.genre, b.thumbnail_url,
-        b.publisher, b.published_year,
-        b.page_count
+        b.genre, b.thumbnail_url
+        
       FROM books b
       WHERE b.id = ?
       ON DUPLICATE KEY UPDATE
@@ -371,10 +368,8 @@ app.post('/api/favorite-to-library', async (req, res) => {
         title         = VALUES(title),
         author        = VALUES(author),
         genre         = VALUES(genre),
-        thumbnail_url = VALUES(thumbnail_url),
-        publisher     = VALUES(publisher),
-        published_year= VALUES(published_year),
-        page_count    = VALUES(page_count)
+        thumbnail_url = VALUES(thumbnail_url)
+      
     `;
     await db.promise().query(insertLibSql, [userId, bookId]);
 
