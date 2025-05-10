@@ -3,12 +3,32 @@ const express = require('express');
 
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+
+// ---------- Token & Şifre Yardımcıları ----------
+function newToken() {
+  return crypto.randomBytes(32).toString('hex');     // Kullanıcıya gidecek RAW token
+}
+
+function sha256(str) {
+  return crypto.createHash('sha256').update(str).digest('hex');  // DB'de tutulacak hash
+}
+
+// İleride /reset rotasında kullanacağız
+function hashPwd(pwd) {
+  return bcrypt.hash(pwd, 12);        // Promise<string>
+}
+function cmpPwd(pwd, hash) {
+  return bcrypt.compare(pwd, hash);   // Promise<boolean>
+}
+
 // const multer = require("multer");
 // const path   = require("path");
 const bodyParser = require('body-parser');
 const cors       = require('cors');
 const router     = express.Router();
 const app        = express();
+
+
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -45,6 +65,39 @@ db.query('SELECT 1', (err) => {
   else     console.log('✅ MySQL havuzu hazır.');
 });
 
+// -------------------- Forgot Password --------------------
+app.post('/api/auth/forgot', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'E-posta gerekli' });
+
+  // 1) Kullanıcı var mı?
+  const [rows] = await db.promise().query(
+    'SELECT id FROM users WHERE email = ?',
+    [email]
+  );
+  if (rows.length === 0) {
+    // Bilgi sızdırma olmasın → her zaman OK dön
+    return res.json({ ok: true });
+  }
+  const userId = rows[0].id;
+
+  // 2) Token üret
+  const raw   = newToken();          // Kullanıcıya gidecek
+  const hash  = sha256(raw);         // Veritabanında tutulacak
+
+  // 3) Veritabanına ekle
+  await db.promise().query(
+    `INSERT INTO password_resets (user_id, token_hash, expires_at)
+     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))`,
+    [userId, hash]
+  );
+
+  // 4) Şimdilik mail yok → linki consola yazalım
+  console.log('\n▼ Şifre sıfırlama linki:');
+  console.log(`bookifyapp://reset?token=${raw}\n`);
+
+  return res.json({ ok: true });
+});
 
 // -------------------- Login Route --------------------
 app.post('/api/auth/login', (req, res) => {
