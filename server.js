@@ -1,6 +1,7 @@
 // ---------------------------  server.js  ---------------------------
 const express = require('express');
-
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 // const multer = require("multer");
 // const path   = require("path");
 const bodyParser = require('body-parser');
