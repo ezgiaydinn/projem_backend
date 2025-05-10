@@ -28,14 +28,15 @@ const cors       = require('cors');
 const router     = express.Router();
 const app        = express();
 
-
-
 app.use(cors());
 app.use(bodyParser.json());
 
 // ---------------- MySQL bağlantısı ----------------
 const mysql = require('mysql2');
 require('dotenv').config();
+
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);   // .env’deki anahtar
 
 // ►►► TEKİL createConnection yerine H A V U Z ◄◄◄
 const db = mysql.createPool({
@@ -67,93 +68,155 @@ db.query('SELECT 1', (err) => {
 
 // -------------------- Forgot Password --------------------
 app.post('/api/auth/forgot', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'E-posta gerekli' });
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'E-posta gerekli' });
 
-  // 1) Kullanıcı var mı?
-  const [rows] = await db.promise().query(
-    'SELECT id FROM users WHERE email = ?',
-    [email]
-  );
-  if (rows.length === 0) {
-    // Bilgi sızdırma olmasın → her zaman OK dön
+    /* 1) Kullanıcıyı bul */
+    const [[user]] = await db.promise().query(
+      'SELECT id FROM users WHERE email = ?', [email]
+    );
+    if (!user) return res.json({ ok: true });          // bilgi sızdırmıyoruz
+
+    /* 2) Token üret */
+    const raw  = newToken();          // Mailde kullanılan
+    const hash = sha256(raw);         // DB’de saklanan
+
+    /* 3) Veritabanına kaydet */
+    await db.promise().query(
+      `INSERT INTO password_resets (user_id, token_hash, expires_at)
+       VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))`,
+      [user.id, hash]
+    );
+
+    /* 4) Mail gönder */
+    const deepLink = `bookifyapp://reset?token=${raw}`;
+
+    await sgMail.send({
+      to: email,
+      from: process.env.SENDGRID_FROM,        // .env’deki doğrulanmış adres
+      subject: 'Şifre sıfırlama bağlantın',
+      html: `
+        <p>Merhaba,</p>
+        <p>Şifreni 30&nbsp;dk içinde sıfırlamak için bu bağlantıya dokun:</p>
+        <a href="${deepLink}">Şifreyi uygulamada sıfırla</a>
+        <p>Linke dokununca açılmazsa kopyalayıp tarayıcına yapıştırabilirsin.</p>
+      `,
+    });
+
+    /* 5) İstersen debug için terminale yaz */
+    console.log(`🔗 Reset link: ${deepLink}`);
+
     return res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /api/auth/forgot error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
   }
-  const userId = rows[0].id;
-
-  // 2) Token üret
-  const raw   = newToken();          // Kullanıcıya gidecek
-  const hash  = sha256(raw);         // Veritabanında tutulacak
-
-  // 3) Veritabanına ekle
-  await db.promise().query(
-    `INSERT INTO password_resets (user_id, token_hash, expires_at)
-     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))`,
-    [userId, hash]
-  );
-
-  // 4) Şimdilik mail yok → linki consola yazalım
-  console.log('\n▼ Şifre sıfırlama linki:');
-  console.log(`bookifyapp://reset?token=${raw}\n`);
-
-  return res.json({ ok: true });
 });
 
-// -------------------- Login Route --------------------
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
+// -------------------- Reset Password --------------------
+app.post('/api/auth/reset', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password)
+      return res.status(400).json({ error: 'Token ve yeni şifre gerekli' });
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email ve şifre zorunludur.' });
+    const tokenHash = sha256(token);
+
+    // 1) Token geçerli mi?
+    const [[row]] = await db.promise().query(
+      `SELECT user_id FROM password_resets
+       WHERE token_hash = ? AND expires_at > NOW()`,
+      [tokenHash]
+    );
+    if (!row) return res.status(400).json({ error: 'Token geçersiz veya süresi dolmuş' });
+
+    // 2) Şifreyi hash’le ve güncelle
+    const pwdHash = await hashPwd(password);
+    await db.promise().query(
+      'UPDATE users SET password = ? WHERE id = ?',
+      [pwdHash, row.user_id]
+    );
+
+    // 3) Token’i sil
+    await db.promise().query(
+      'DELETE FROM password_resets WHERE token_hash = ?',
+      [tokenHash]
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /api/auth/reset error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
   }
-
-  const sql = 'SELECT * FROM users WHERE email = ? AND password = ?';
-  db.query(sql, [email, password], (err, results) => {
-    if (err) {
-      console.error('Giriş hatası:', err);
-      return res.status(500).json({ error: 'Sunucu hatası.' });
-    }
-
-    if (results.length > 0) {
-      return res.status(200).json({
-        message: 'Giriş başarılı!',
-        user: { id: results[0].id, name: results[0].name, email: results[0].email }
-      });
-    } else {
-      return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
-    }
-  });
 });
 
-
-// -------------------- Signup Route -------------------
-app.post('/api/auth/signup', (req, res) => {
-  const { name, email, password } = req.body;
-
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
-  }
-
-  const checkUserSql = 'SELECT * FROM users WHERE email = ?';
-  db.query(checkUserSql, [email], (err, results) => {
-    if (err) {
-      console.error('Kullanıcı kontrol hatası:', err);
-      return res.status(500).json({ error: 'Sunucu hatası.' });
+// -------------------- Login Route (bcrypt ile) --------------------
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'E-posta ve şifre zorunludur.' });
     }
 
-    if (results.length > 0) {
+    /* 1) Kullanıcıyı e-posta ile çek */
+    const [[user]] = await db.promise().query(
+      'SELECT id, name, email, password AS pwdHash FROM users WHERE email = ?',
+      [email]
+    );
+    if (!user) {
+      // E-posta yoksa yine aynı hatayı döneriz: bilgi sızdırmıyoruz
+      return res.status(401).json({ error: 'Geçersiz e-posta veya şifre.' });
+    }
+
+    /* 2) Şifreyi doğrula (bcryptjs) */
+    const isMatch = await cmpPwd(password, user.pwdHash);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Geçersiz e-posta veya şifre.' });
+    }
+
+    /* 3) Başarılı giriş – şifre hash’ini response’a koymuyoruz */
+    return res.status(200).json({
+      message: 'Giriş başarılı!',
+      user: { id: user.id, name: user.name, email: user.email }
+    });
+  } catch (err) {
+    console.error('POST /api/auth/login error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+// -------------------- Signup Route (bcrypt) --------------------
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
+    }
+
+    /* 1) E-posta kullanımda mı? */
+    const [[exists]] = await db.promise().query(
+      'SELECT 1 FROM users WHERE email = ?',
+      [email]
+    );
+    if (exists) {
       return res.status(409).json({ error: 'Bu e-posta zaten kullanılıyor.' });
     }
 
-    const insertUserSql = 'INSERT INTO users (name, email, password) VALUES (?, ?, ?)';
-    db.query(insertUserSql, [name, email, password], (err) => {
-      if (err) {
-        console.error('Kayıt hatası:', err);
-        return res.status(500).json({ error: 'Kayıt yapılamadı.' });
-      }
-      return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
-    });
-  });
+    /* 2) Şifreyi hash’le */
+    const pwdHash = await hashPwd(password);   // bcrypt.hash(pwd, 12)
+
+    /* 3) Kullanıcıyı ekle */
+    await db.promise().query(
+      'INSERT INTO users (name, email, password) VALUES (?,?,?)',
+      [name, email, pwdHash]
+    );
+
+    return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
+  } catch (err) {
+    console.error('POST /api/auth/signup error:', err);
+    res.status(500).json({ error: 'Sunucu hatası.' });
+  }
 });
 
 
