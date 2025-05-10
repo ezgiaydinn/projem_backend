@@ -118,27 +118,44 @@ app.post('/api/auth/forgot', async (req, res) => {
 app.post('/api/auth/reset', async (req, res) => {
   try {
     const { token, password } = req.body;
-    if (!token || !password)
-      return res.status(400).json({ error: 'Token ve yeni şifre gerekli' });
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token ve yeni şifre gerekli.' });
+    }
 
     const tokenHash = sha256(token);
 
-    // 1) Token geçerli mi?
+    /* 1) Token geçerli mi? */
     const [[row]] = await db.promise().query(
-      `SELECT user_id FROM password_resets
-       WHERE token_hash = ? AND expires_at > NOW()`,
+      `SELECT user_id
+         FROM password_resets
+        WHERE token_hash = ?
+          AND expires_at > NOW()`,
       [tokenHash]
     );
-    if (!row) return res.status(400).json({ error: 'Token geçersiz veya süresi dolmuş' });
+    if (!row) {
+      return res.status(400).json({ error: 'Token geçersiz veya süresi dolmuş.' });
+    }
 
-    // 2) Şifreyi hash’le ve güncelle
-    const pwdHash = await hashPwd(password);
+    /* 2) Mevcut şifre hash’ini al */
+    const [[u]] = await db.promise().query(
+      'SELECT password FROM users WHERE id = ?',
+      [row.user_id]
+    );
+
+    /* 3) Yeni şifre eskiyle aynı mı? */
+    const same = await cmpPwd(password, u.password);   // bcrypt.compare
+    if (same) {
+      return res.status(400).json({ error: 'Yeni şifre, mevcut şifrenizle aynı olamaz.' });
+    }
+
+    /* 4) Yeni şifreyi hash’le ve güncelle */
+    const pwdHash = await hashPwd(password);           // bcrypt.hash
     await db.promise().query(
       'UPDATE users SET password = ? WHERE id = ?',
       [pwdHash, row.user_id]
     );
 
-    // 3) Token’i sil
+    /* 5) Token’i sil (tek kullanımlık) */
     await db.promise().query(
       'DELETE FROM password_resets WHERE token_hash = ?',
       [tokenHash]
@@ -219,7 +236,6 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-
 // ----------- Kullanıcının puan verilerini döner -----------
 app.get('/api/ratings/:userId', async (req, res) => {
   const { userId } = req.params;
@@ -236,7 +252,6 @@ app.get('/api/ratings/:userId', async (req, res) => {
       res.status(500).json({ error: 'Veritabanı hatası.' });
     });
 });
-
 
 // ------------------- Profile Route -------------------
 app.get('/api/auth/profile/:userId', (req, res) => {
@@ -256,7 +271,6 @@ app.get('/api/auth/profile/:userId', (req, res) => {
     }
   });
 });
-
 
 // --------------- Update profil route ------------------
 app.put('/api/auth/updateProfile', (req, res) => {
@@ -280,7 +294,6 @@ app.put('/api/auth/updateProfile', (req, res) => {
     return res.status(200).json({ message: 'Profil başarıyla güncellendi.' });
   });
 });
-
 
 // ------------------- Profil fotoğrafı ------------------
 const multer = require('multer');
@@ -312,7 +325,6 @@ app.post('/api/auth/uploadProfileImage', upload.single('image'), (req, res) => {
     return res.status(200).json({ message: 'Profil fotoğrafı güncellendi.' });
   });
 });
-
 
 // -------------------- FAVORITES ------------------------
 app.post('/api/favorites/save', async (req, res) => {
@@ -505,7 +517,6 @@ app.post('/api/favorite-to-library', async (req, res) => {
   }
 });
 
-
 // -------------------- LIBRARY -------------------------
 app.get('/api/library/:userId', async (req, res) => {
   try {
@@ -577,7 +588,6 @@ app.post('/api/library/remove', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
 
 // ----------------- Sunucuyu başlat --------------------
 const PORT = 3000;
