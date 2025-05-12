@@ -70,42 +70,61 @@ db.query('SELECT 1', (err) => {
 app.post('/api/auth/forgot', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'E-posta gerekli' });
+    if (!email) {
+      return res.status(400).json({ error: 'E-posta gerekli' });
+    }
 
-    /* 1) Kullanıcıyı bul */
+    // 1) Kullanıcıyı bul
     const [[user]] = await db.promise().query(
-      'SELECT id FROM users WHERE email = ?', [email]
+      'SELECT id FROM users WHERE email = ?',
+      [email]
     );
-    if (!user) return res.json({ ok: true });          // bilgi sızdırmıyoruz
+    // Eğer kullanıcı yoksa bile aynı yanıtı dönüyoruz (bilgi sızıntısı olmasın)
+    if (!user) {
+      return res.json({ ok: true });
+    }
 
-    /* 2) Token üret */
-    const raw  = newToken();          // Mailde kullanılan
-    const hash = sha256(raw);         // DB’de saklanan
+    // 2) Token üret
+    const raw  = newToken();       // Kullanıcıya gidecek asıl token
+    const hash = sha256(raw);      // Veritabanında saklanacak hash
 
-    /* 3) Veritabanına kaydet */
+    // 3) Veritabanına ekle (30 dk sonra süresi dolacak)
     await db.promise().query(
       `INSERT INTO password_resets (user_id, token_hash, expires_at)
        VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))`,
       [user.id, hash]
     );
 
-    /* 4) Mail gönder */
-    const deepLink = `bookifyapp://reset?token=${raw}`;
+    // 4) Linkleri hazırla
+    const deepLinkScheme = `bookifyapp://reset?token=${raw}`;
+    const webLink        = `https://projembackend-production-4549.up.railway.app/reset?token=${raw}`;
 
+    // 5) Mail gönder (hem text hem html)
     await sgMail.send({
       to: email,
-      from: process.env.SENDGRID_FROM,        // .env’deki doğrulanmış adres
-      subject: 'Şifre sıfırlama bağlantın',
-      html: `
-        <p>Merhaba,</p>
-        <p>Şifreni 30&nbsp;dk içinde sıfırlamak için bu bağlantıya dokun:</p>
-        <a href="${deepLink}">Şifreyi uygulamada sıfırla</a>
-        <p>Linke dokununca açılmazsa kopyalayıp tarayıcına yapıştırabilirsin.</p>
+      from: process.env.SENDGRID_FROM,    // .env’deki onaylı adres
+      subject: 'Şifre Sıfırlama Bağlantınız',
+      text: `
+Merhaba,
+
+Şifrenizi 30 dk içinde sıfırlamak için lütfen bu linki tıklayın veya kopyala-yapıştır yapın:
+${webLink}
+
+Uygulamada otomatik açmak isterseniz:
+${deepLinkScheme}
       `,
+      html: `
+<p>Merhaba,</p>
+<p>Şifrenizi 30&nbsp;dk içinde sıfırlamak için <a href="${webLink}">buraya tıklayın</a>.</p>
+<p><strong>Uygulamada açmak için:</strong><br>
+<code>${deepLinkScheme}</code></p>
+<p>Link çalışmazsa kopyalayıp tarayıcınıza veya mobil cihazınıza yapıştırabilirsiniz.</p>
+      `
     });
 
-    /* 5) İstersen debug için terminale yaz */
-    console.log(`🔗 Reset link: ${deepLink}`);
+    // (İsteğe bağlı) Konsola debug linki yaz
+    console.log(`🔗 Reset link (scheme): ${deepLinkScheme}`);
+    console.log(`🔗 Reset link (web):    ${webLink}`);
 
     return res.json({ ok: true });
   } catch (err) {
@@ -113,6 +132,7 @@ app.post('/api/auth/forgot', async (req, res) => {
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+
 
 // -------------------- Reset Password --------------------
 app.post('/api/auth/reset', async (req, res) => {
