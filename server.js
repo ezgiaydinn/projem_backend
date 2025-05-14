@@ -169,30 +169,44 @@ app.post('/api/auth/reset', async (req, res) => {
 });
 // GET /api/recommendations
 // Header: Authorization: Bearer <token>
- router.get('/api/recommendations', async (req, res) => {
-    const userId = parseInt(req.query.userId, 10);
+const authenticate = require('../middleware/authenticate');
+
+router.get(
+  '/api/recommendations',
+  authenticate,
   async (req, res) => {
     try {
-      const userId = req.user.id;  
-      const recs = await Recommendation.findAll({
-        where: { user_id: userId },
-        include: [{ model: Book, attributes:['title','authors','thumbnail_url'] }],
-        order: [['score','DESC']],
-        limit: 10
-      });
-      return res.json(recs.map(r => ({
+      const userId = req.user.id;
+      // SQL ile direkt çekiyoruz
+      const [rows] = await db.promise().query(
+        `SELECT r.book_id, r.score,
+                b.title, b.authors, b.thumbnail_url
+         FROM recommendations AS r
+         JOIN books AS b ON b.id = r.book_id
+         WHERE r.user_id = ?
+         ORDER BY r.score DESC
+         LIMIT 10`,
+        [userId]
+      );
+
+      // İstersen ufak bir dönüştürme yap
+      const payload = rows.map(r => ({
         bookId: r.book_id,
-        title:  r.Book.title,
-        authors:r.Book.authors,
-        thumb:  r.Book.thumbnail_url,
-        score:  r.score
-      })));
-    } catch(err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Öneri alınırken hata oluştu.' });
+        title:  r.title,
+        authors: JSON.parse(r.authors),       // authors JSON tipindeyse
+        thumb:   r.thumbnail_url,
+        score:   r.score
+      }));
+
+      return res.json({ ok: true, recommendations: payload });
+    } catch (err) {
+      console.error('Öneri alınırken hata:', err);
+      return res.status(500).json({ ok: false, error: 'Öneri alınırken hata oluştu.' });
     }
   }
-});
+);
+
+module.exports = router;
 
 module.exports = router;
 // -------------------- Login Route (bcrypt ile) --------------------
