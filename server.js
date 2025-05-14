@@ -167,26 +167,19 @@ app.post('/api/auth/reset', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-router.get('/api/recommendations', async (req, res) => {
-  const userId = parseInt(req.query.userId, 10);
-  async (req, res) => {
-    try {
-      // Python servisin URL’i
-      const PY_URL = process.env.PYTHON_SERVICE_URL;  // örn. http://python:8001
-      const resp = await axios.post(
-        `${PY_URL}/recommend/`,
-        { user_id: req.user.id, top_n: 10 }
-      );
-      // Python’dan gelen { user_id, recs: [ { book_id, score }, ... ] }
-      // istersen burada Book tablonuzla join yapıp title/thumbnail ekleyebilirsiniz
-      return res.json(resp.data.recs);
-    } catch(err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Öneri servisi hatası.' });
-    }
+router.get('/api/recommendations/:userId', async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  try {
+    const [rows] = await db.promise().query(
+      'SELECT book_id, score FROM recommendations WHERE user_id = ? ORDER BY score DESC',
+      [userId]
+    );
+    res.json({ ok: true, recommendations: rows });
+  } catch (err) {
+    console.error('DB hatası:', err);
+    res.status(500).json({ ok: false, error: 'Veritabanı okunamadı.' });
   }
 });
-
 module.exports = router;
 // -------------------- Login Route (bcrypt ile) --------------------
 app.post('/api/auth/login', async (req, res) => {
