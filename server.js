@@ -222,7 +222,36 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
+// GET /api/recommendations
+// Header: Authorization: Bearer <token>
+router.get(
+  '/api/recommendations',
+  router.get('/api/recommendations', async (req, res) => {
+    const userId = parseInt(req.query.userId, 10);
+  }),
+  async (req, res) => {
+    try {
+      const userId = req.user.id;  
+      const recs = await Recommendation.findAll({
+        where: { user_id: userId },
+        include: [{ model: Book, attributes:['title','authors','thumbnail_url'] }],
+        order: [['score','DESC']],
+        limit: 10
+      });
+      return res.json(recs.map(r => ({
+        bookId: r.book_id,
+        title:  r.Book.title,
+        authors:r.Book.authors,
+        thumb:  r.Book.thumbnail_url,
+        score:  r.score
+      })));
+    } catch(err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Öneri alınırken hata oluştu.' });
+    }
+  }
+);
+module.exports = router;
 // -------------------- Signup Route (bcrypt) --------------------
 app.post('/api/auth/signup', async (req, res) => {
   try {
