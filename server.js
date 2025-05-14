@@ -605,5 +605,5 @@ app.post('/api/library/remove', async (req, res) => {
 // ----------------- Sunucuyu başlat --------------------
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Sunucu ${PORT} portunda çalışıyorrr`);
+  console.log(`🚀 Sunucu ${PORT} portunda çalışıyor.`);
 });
