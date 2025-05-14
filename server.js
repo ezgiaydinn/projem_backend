@@ -70,61 +70,42 @@ db.query('SELECT 1', (err) => {
 app.post('/api/auth/forgot', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'E-posta gerekli' });
-    }
+    if (!email) return res.status(400).json({ error: 'E-posta gerekli' });
 
-    // 1) Kullanıcıyı bul
+    /* 1) Kullanıcıyı bul */
     const [[user]] = await db.promise().query(
-      'SELECT id FROM users WHERE email = ?',
-      [email]
+      'SELECT id FROM users WHERE email = ?', [email]
     );
-    // Eğer kullanıcı yoksa bile aynı yanıtı dönüyoruz (bilgi sızıntısı olmasın)
-    if (!user) {
-      return res.json({ ok: true });
-    }
+    if (!user) return res.json({ ok: true });          // bilgi sızdırmıyoruz
 
-    // 2) Token üret
-    const raw  = newToken();       // Kullanıcıya gidecek asıl token
-    const hash = sha256(raw);      // Veritabanında saklanacak hash
+    /* 2) Token üret */
+    const raw  = newToken();          // Mailde kullanılan
+    const hash = sha256(raw);         // DB’de saklanan
 
-    // 3) Veritabanına ekle (30 dk sonra süresi dolacak)
+    /* 3) Veritabanına kaydet */
     await db.promise().query(
       `INSERT INTO password_resets (user_id, token_hash, expires_at)
        VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))`,
       [user.id, hash]
     );
 
-    // 4) Linkleri hazırla
-    const deepLinkScheme = `bookifyapp://reset?token=${raw}`;
-    const webLink        = `https://projembackend-production-4549.up.railway.app/reset?token=${raw}`;
+    /* 4) Mail gönder */
+    const deepLink = `bookifyapp://reset?token=${raw}`;
 
-    // 5) Mail gönder (hem text hem html)
     await sgMail.send({
       to: email,
-      from: process.env.SENDGRID_FROM,    // .env’deki onaylı adres
-      subject: 'Şifre Sıfırlama Bağlantınız',
-      text: `
-Merhaba,
-
-Şifrenizi 30 dk içinde sıfırlamak için lütfen bu linki tıklayın veya kopyala-yapıştır yapın:
-${webLink}
-
-Uygulamada otomatik açmak isterseniz:
-${deepLinkScheme}
-      `,
+      from: process.env.SENDGRID_FROM,        // .env’deki doğrulanmış adres
+      subject: 'Şifre sıfırlama bağlantın',
       html: `
-<p>Merhaba,</p>
-<p>Şifrenizi 30&nbsp;dk içinde sıfırlamak için <a href="${webLink}">buraya tıklayın</a>.</p>
-<p><strong>Uygulamada açmak için:</strong><br>
-<code>${deepLinkScheme}</code></p>
-<p>Link çalışmazsa kopyalayıp tarayıcınıza veya mobil cihazınıza yapıştırabilirsiniz.</p>
-      `
+        <p>Merhaba,</p>
+        <p>Şifreni 30&nbsp;dk içinde sıfırlamak için bu bağlantıya dokun:</p>
+        <a href="${deepLink}">Şifreyi uygulamada sıfırla</a>
+        <p>Linke dokununca açılmazsa kopyalayıp tarayıcına yapıştırabilirsin.</p>
+      `,
     });
 
-    // (İsteğe bağlı) Konsola debug linki yaz
-    console.log(`🔗 Reset link (scheme): ${deepLinkScheme}`);
-    console.log(`🔗 Reset link (web):    ${webLink}`);
+    /* 5) İstersen debug için terminale yaz */
+    console.log(`🔗 Reset link: ${deepLink}`);
 
     return res.json({ ok: true });
   } catch (err) {
@@ -132,7 +113,6 @@ ${deepLinkScheme}
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
 
 // -------------------- Reset Password --------------------
 app.post('/api/auth/reset', async (req, res) => {
@@ -222,36 +202,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-// GET /api/recommendations
-// Header: Authorization: Bearer <token>
-router.get(
-  '/api/recommendations',
-  router.get('/api/recommendations', async (req, res) => {
-    const userId = parseInt(req.query.userId, 10);
-  }),
-  async (req, res) => {
-    try {
-      const userId = req.user.id;  
-      const recs = await Recommendation.findAll({
-        where: { user_id: userId },
-        include: [{ model: Book, attributes:['title','authors','thumbnail_url'] }],
-        order: [['score','DESC']],
-        limit: 10
-      });
-      return res.json(recs.map(r => ({
-        bookId: r.book_id,
-        title:  r.Book.title,
-        authors:r.Book.authors,
-        thumb:  r.Book.thumbnail_url,
-        score:  r.score
-      })));
-    } catch(err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Öneri alınırken hata oluştu.' });
-    }
-  }
-);
-module.exports = router;
+
 // -------------------- Signup Route (bcrypt) --------------------
 app.post('/api/auth/signup', async (req, res) => {
   try {
