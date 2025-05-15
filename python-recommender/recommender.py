@@ -36,6 +36,10 @@ algo.fit(trainset)
 # ---- 6) FastAPI uygulaması ----
 app = FastAPI(title="Bookify Recommender Service")
 
+@app.get("/")
+def root():
+    return {"message": "✅ Bookify Recommender Service is running!"}
+
 class RecRequest(BaseModel):
     user_id: int
     top_n: int = 10
@@ -82,4 +86,5 @@ def recommend(req: RecRequest):
 # ---- 9) Local test için ----
 if __name__ == "__main__":
     import uvicorn # type: ignore
+    print("✅ Bookify Recommender Service is starting...")
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))

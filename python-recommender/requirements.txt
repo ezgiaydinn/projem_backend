@@ -6,3 +6,4 @@ scikit-surprise
 mysql-connector-python
 python-dotenv
 SQLAlchemy
+uvicorn[standard]
