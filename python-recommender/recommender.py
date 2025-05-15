@@ -1,11 +1,11 @@
 import os
-from dotenv import load_dotenv # type: ignore
-from fastapi import FastAPI, HTTPException # type: ignore
-from pydantic import BaseModel # type: ignore
-import pandas as pd # type: ignore
-from sqlalchemy import create_engine # type: ignore
-from surprise import Dataset, Reader, SVD # type: ignore
-from fastapi.responses import JSONResponse # type: ignore
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+import pandas as pd
+from sqlalchemy import create_engine
+from surprise import Dataset, Reader, SVD
 
 # ---- 1) Ortam değişkenlerini yükle ----
 load_dotenv(dotenv_path=".env")
@@ -39,8 +39,7 @@ app = FastAPI(title="Bookify Recommender Service")
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/docs") # type: ignore
-    return {"message": "✅ Bookify Recommender Service is running!"}
+    return RedirectResponse(url="/docs")
 
 class RecRequest(BaseModel):
     user_id: int
@@ -68,7 +67,6 @@ def recommend(req: RecRequest):
     df_user = df_ratings[df_ratings['user_id'] == user]
 
     if df_user.empty:
-        # 🌟 Soğuk başlangıç → popüler kitaplar öner
         fallback_books = get_popular_books(top_n=top_n)
         return {"recommendations": [{"book_id": bid, "score": None} for bid in fallback_books]}
 
@@ -85,8 +83,9 @@ def recommend(req: RecRequest):
     recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
     return {"recommendations": recommendations}
 
-# ---- 9) Local test için ----
+# ---- 9) Local veya Railway test için ----
 if __name__ == "__main__":
-    import uvicorn # type: ignore
-    print("✅ Bookify Recommender Service is starting...")
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 3306)))
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    print("✅ Bookify Recommender Service is starting on port", port)
+    uvicorn.run("recommender:app", host="0.0.0.0", port=port, reload=False)
