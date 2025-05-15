@@ -1,14 +1,10 @@
-# recommender.py
-
 import os
-import json
+from dotenv import load_dotenv # type: ignore
+from fastapi import FastAPI, HTTPException # type: ignore
+from pydantic import BaseModel # type: ignore
 import pandas as pd # type: ignore
 from sqlalchemy import create_engine # type: ignore
-import mysql.connector # type: ignore
 from surprise import Dataset, Reader, SVD # type: ignore
-from sklearn.feature_extraction.text import TfidfVectorizer # type: ignore
-from sklearn.metrics.pairwise import cosine_similarity # type: ignore
-from dotenv import load_dotenv # type: ignore
 
 # ---- 1) Ortam değişkenlerini yükle ----
 load_dotenv(dotenv_path=".env")
@@ -19,124 +15,71 @@ DB_USER     = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME     = os.getenv("DB_NAME")
 
-# ---- 2) SQLAlchemy engine (pandas.read_sql için) ----
+# ---- 2) SQLAlchemy engine ----
 engine = create_engine(
-    f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}"
-    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
-# ---- 3) MySQL-Connector bağlantısı (yazma işlemleri için) ----
-conn = mysql.connector.connect(
-    host=DB_HOST,
-    port=int(DB_PORT),
-    user=DB_USER,
-    password=DB_PASSWORD,
-    database=DB_NAME,
-    use_pure=True
-)
+# ---- 3) Verileri çek ----
+df_ratings = pd.read_sql("SELECT user_id, book_id, rating FROM ratings", engine)
+df_books = pd.read_sql("SELECT id AS book_id FROM books", engine)
 
-# ---------- 4) Verileri oku (explicit + implicit feedback) ----------
-ratings = pd.read_sql(
-    "SELECT user_id, book_id, rating FROM ratings",
-    engine
-)
-fav = pd.read_sql(
-    "SELECT user_id, book_id FROM favorites",
-    engine
-)
-fav["rating"] = 4.0
-
-lib = pd.read_sql(
-    "SELECT user_id, book_id FROM librarys",
-    engine
-)
-lib["rating"] = 3.5
-
-# Tüm geri bildirimleri birleştir
-ratings_all = pd.concat([ratings, fav, lib], ignore_index=True)
-
-# Kitap meta-verisi
-books = pd.read_sql(
-    "SELECT id AS book_id, title, genre, authors FROM books",
-    engine
-)
-
-# ---------- 5) Content-based özellik çıkarımı ----------
-books["genre_str"] = books["genre"].fillna("")
-def parse_authors(a):
-    try:
-        return ", ".join(json.loads(a))
-    except:
-        return a or ""
-books["authors_str"] = books["authors"].apply(parse_authors)
-
-tfidf = TfidfVectorizer()
-tfidf_mat = tfidf.fit_transform(books["genre_str"])
-
-# ---------- 6) Collaborative Filtering (SVD) ----------
+# ---- 4) Surprise dataset ----
 reader = Reader(rating_scale=(1, 5))
-data   = Dataset.load_from_df(
-    ratings_all[["user_id", "book_id", "rating"]],
-    reader
-)
-train  = data.build_full_trainset()
-svd    = SVD(n_factors=50, lr_all=0.005, reg_all=0.02)
-svd.fit(train)
+data = Dataset.load_from_df(df_ratings[['user_id', 'book_id', 'rating']], reader)
+trainset = data.build_full_trainset()
 
-# ---------- 7) Hybrid öneri fonksiyonu ----------
-def hybrid(user_id, top_n=10, alpha=0.7):
-    all_ids = books["book_id"].tolist()
+# ---- 5) Modeli eğit ----
+algo = SVD(n_factors=50, n_epochs=20)
+algo.fit(trainset)
 
-    # 7.1) CF skorları
-    cf_scores = {bid: svd.predict(user_id, bid).est for bid in all_ids}
+# ---- 6) FastAPI uygulaması ----
+app = FastAPI(title="Bookify Recommender Service")
 
-    # 7.2) CB skorları (son explicit puanlanan kitaba göre)
-    user_hist = ratings[ratings.user_id == user_id]
-    if not user_hist.empty:
-        last_bid = user_hist.iloc[-1]["book_id"]
-        mask     = books["book_id"] == last_bid
-        if mask.any():
-            idx = books.index[mask][0]
-        else:
-            idx = 0
-    else:
-        idx = 0
+class RecRequest(BaseModel):
+    user_id: int
+    top_n: int = 10
 
-    sim       = cosine_similarity(tfidf_mat[idx], tfidf_mat)[0]
-    cb_scores = {bid: sim[i] for i, bid in enumerate(all_ids)}
+# ---- 7) Yardımcı fonksiyonlar ----
+def get_popular_books(top_n=10):
+    popular = (df_ratings['book_id']
+               .value_counts()
+               .head(top_n)
+               .reset_index())
+    popular.columns = ['book_id', 'rating_count']
+    return popular['book_id'].tolist()
 
-    # 7.3) Ağırlıklı birleşim
-    final = {
-        b: alpha * cf_scores.get(b, 0) + (1 - alpha) * cb_scores.get(b, 0)
-        for b in all_ids
-    }
-    return sorted(final.items(), key=lambda x: x[1], reverse=True)[:top_n]
+def get_random_books(top_n=10):
+    return df_books['book_id'].sample(top_n).tolist()
 
-# ---------- 8) recommendations tablosunu oluştur (varsa pas geç) ----------
-cursor = conn.cursor()
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS recommendations (
-  user_id    INT         NOT NULL,
-  book_id    VARCHAR(50) NOT NULL,
-  score      FLOAT       NOT NULL,
-  created_at TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (user_id, book_id),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-""")
+# ---- 8) API endpoint ----
+@app.post("/recommend")
+def recommend(req: RecRequest):
+    user = req.user_id
+    top_n = req.top_n
 
-# ---------- 9) Her kullanıcı için öneri yaz ----------
-for uid in ratings["user_id"].unique():
-    for bid, score in hybrid(uid):
-        cursor.execute("""
-          INSERT INTO recommendations (user_id, book_id, score)
-          VALUES (%s, %s, %s)
-          ON DUPLICATE KEY UPDATE score=VALUES(score), created_at=NOW()
-        """, (int(uid), bid, float(score)))
+    # Kullanıcının puan verdiği kitaplar
+    df_user = df_ratings[df_ratings['user_id'] == user]
 
-conn.commit()
-cursor.close()
-conn.close()
+    if df_user.empty:
+        # 🌟 Soğuk başlangıç → popüler kitaplar öner
+        fallback_books = get_popular_books(top_n=top_n)
+        return {"recommendations": [{"book_id": bid, "score": None} for bid in fallback_books]}
 
-print("✅ Öneriler başarıyla güncellendi.")
+    seen = set(df_user['book_id'].tolist())
+    candidates = [bid for bid in df_books['book_id'] if bid not in seen]
+
+    preds = []
+    for bid in candidates:
+        est = algo.predict(uid=user, iid=bid).est
+        preds.append((bid, est))
+    preds.sort(key=lambda x: x[1], reverse=True)
+    top_preds = preds[:top_n]
+
+    recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
+    return {"recommendations": recommendations}
+
+# ---- 9) Local test için ----
+if __name__ == "__main__":
+    import uvicorn # type: ignore
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
