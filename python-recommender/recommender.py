@@ -36,8 +36,8 @@ algo.fit(trainset)
 # ---- 6) FastAPI uygulaması ----
 app = FastAPI(title="Bookify Recommender Service")
 
-@app.get("/")
-def root():
+@app.get("/", response_class=JSONResponse) # type: ignore
+async def root():
     return {"message": "✅ Bookify Recommender Service is running!"}
 
 class RecRequest(BaseModel):
