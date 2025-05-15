@@ -37,8 +37,9 @@ algo.fit(trainset)
 # ---- 6) FastAPI uygulaması ----
 app = FastAPI(title="Bookify Recommender Service")
 
-@app.get("/", response_class=JSONResponse) # type: ignore
+@app.get("/")
 async def root():
+    return RedirectResponse(url="/docs") # type: ignore
     return {"message": "✅ Bookify Recommender Service is running!"}
 
 class RecRequest(BaseModel):
