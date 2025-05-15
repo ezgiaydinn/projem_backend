@@ -5,6 +5,7 @@ from pydantic import BaseModel # type: ignore
 import pandas as pd # type: ignore
 from sqlalchemy import create_engine # type: ignore
 from surprise import Dataset, Reader, SVD # type: ignore
+from fastapi.responses import JSONResponse # type: ignore
 
 # ---- 1) Ortam değişkenlerini yükle ----
 load_dotenv(dotenv_path=".env")
