@@ -187,7 +187,20 @@ app.post('/api/auth/reset', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-
+router.get('/api/recommendations/:userId', async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  try {
+    const [rows] = await db.promise().query(
+      'SELECT book_id, score FROM recommendations WHERE user_id = ? ORDER BY score DESC',
+      [userId]
+    );
+    res.json({ ok: true, recommendations: rows });
+  } catch (err) {
+    console.error('DB hatası:', err);
+    res.status(500).json({ ok: false, error: 'Veritabanı okunamadı.' });
+  }
+});
+module.exports = router;
 // -------------------- Login Route (bcrypt ile) --------------------
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -612,5 +625,5 @@ app.post('/api/library/remove', async (req, res) => {
 // ----------------- Sunucuyu başlat --------------------
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Sunucu ${PORT} portunda çalışıyorrr`);
+  console.log(`🚀 Sunucu ${PORT} portunda çalışıyor.`);
 });
