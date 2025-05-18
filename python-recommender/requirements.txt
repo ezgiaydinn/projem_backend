@@ -7,3 +7,5 @@ mysql-connector-python
 python-dotenv
 SQLAlchemy
 uvicorn[standard]
+python-jose[cryptography]
+passlib[bcrypt]
