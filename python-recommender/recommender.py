@@ -1,11 +1,14 @@
 import os
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-import pandas as pd
-from sqlalchemy import create_engine
-from surprise import Dataset, Reader, SVD
+from dotenv import load_dotenv # type: ignore
+from fastapi import FastAPI, HTTPException, Depends, status # type: ignore
+from fastapi.responses import RedirectResponse # type: ignore
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm # type: ignore
+from jose import JWTError, jwt # type: ignore
+from pydantic import BaseModel # type: ignore
+import pandas as pd # type: ignore
+from sqlalchemy import create_engine # type: ignore
+from surprise import Dataset, Reader, SVD # type: ignore
+from datetime import datetime, timedelta
 
 # ---- 1) Ortam değişkenlerini yükle ----
 load_dotenv(dotenv_path=".env")
@@ -15,6 +18,9 @@ DB_PORT     = os.getenv("DB_PORT")
 DB_USER     = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME     = os.getenv("DB_NAME")
+SECRET_KEY  = os.getenv("SECRET_KEY", "mysecretkey")
+ALGORITHM   = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 # ---- 2) SQLAlchemy engine ----
 engine = create_engine(
@@ -41,11 +47,66 @@ app = FastAPI(title="Bookify Recommender Service")
 async def root():
     return RedirectResponse(url="/docs")
 
+# ---- 7) Authentication yapısı ----
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+fake_users_db = {
+    "dilara@example.com": {
+        "id": 1,
+        "name": "Dilara",
+        "email": "dilara@example.com",
+        "password": "1234"  # NOT: Gerçek uygulamada hashlenmiş şifre kullanılmalı
+    }
+}
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    email: str | None = None
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        token_data = TokenData(email=email)
+    except JWTError:
+        raise credentials_exception
+
+    user = fake_users_db.get(token_data.email)
+    if user is None:
+        raise credentials_exception
+    return user
+
+@app.post("/login", response_model=Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = fake_users_db.get(form_data.username)
+    if not user or form_data.password != user["password"]:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+
+    access_token = create_access_token(data={"sub": user["email"]}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return {"access_token": access_token, "token_type": "bearer"}
+
 class RecRequest(BaseModel):
     user_id: int
     top_n: int = 10
 
-# ---- 7) Yardımcı fonksiyonlar ----
+# ---- 8) Yardımcı fonksiyonlar ----
 def get_popular_books(top_n=10):
     popular = (df_ratings['book_id']
                .value_counts()
@@ -57,15 +118,13 @@ def get_popular_books(top_n=10):
 def get_random_books(top_n=10):
     return df_books['book_id'].sample(top_n).tolist()
 
-# ---- 8) API endpoint ----
+# ---- 9) Protected API endpoint ----
 @app.post("/recommend")
-def recommend(req: RecRequest):
+def recommend(req: RecRequest, current_user: dict = Depends(get_current_user)):
     user = req.user_id
     top_n = req.top_n
 
-    # Kullanıcının puan verdiği kitaplar
     df_user = df_ratings[df_ratings['user_id'] == user]
-
     if df_user.empty:
         fallback_books = get_popular_books(top_n=top_n)
         return {"recommendations": [{"book_id": bid, "score": None} for bid in fallback_books]}
@@ -83,9 +142,9 @@ def recommend(req: RecRequest):
     recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
     return {"recommendations": recommendations}
 
-# ---- 9) Local veya Railway test için ----
+# ---- 10) Local veya Railway test için ----
 if __name__ == "__main__":
-    import uvicorn
+    import uvicorn # type: ignore
     port = int(os.environ.get("PORT", 8000))
     print("✅ Bookify Recommender Service is starting on port", port)
     uvicorn.run("recommender:app", host="0.0.0.0", port=port, reload=False)
