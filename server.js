@@ -8,24 +8,17 @@ const bcrypt = require('bcryptjs');
 function newToken() {
   return crypto.randomBytes(32).toString('hex');     // Kullanıcıya gidecek RAW token
 }
-
 function sha256(str) {
   return crypto.createHash('sha256').update(str).digest('hex');  // DB'de tutulacak hash
 }
-
-// İleride /reset rotasında kullanacağız
-function hashPwd(pwd) {
-  return bcrypt.hash(pwd, 12);        // Promise<string>
-}
-function cmpPwd(pwd, hash) {
-  return bcrypt.compare(pwd, hash);   // Promise<boolean>
-}
+function hashPwd(pwd)  { return bcrypt.hash(pwd, 12); }          // Promise<string>
+function cmpPwd(pwd,h) { return bcrypt.compare(pwd, h); }        // Promise<boolean>
 
 // const multer = require("multer");
 // const path   = require("path");
 const bodyParser = require('body-parser');
 const cors       = require('cors');
-const router     = express.Router();
+//const router     = express.Router(); 
 const app        = express();
 
 app.use(cors());
@@ -70,69 +63,72 @@ db.query('SELECT 1', (err) => {
 app.post('/api/auth/forgot', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'E-posta gerekli' });
-    }
+    if (!email) return res.status(400).json({ error: 'E-posta gerekli' });
 
-    // 1) Kullanıcıyı bul
     const [[user]] = await db.promise().query(
-      'SELECT id FROM users WHERE email = ?',
-      [email]
+      'SELECT id FROM users WHERE email = ?', [email]
     );
-    // Eğer kullanıcı yoksa bile aynı yanıtı dönüyoruz (bilgi sızıntısı olmasın)
-    if (!user) {
-      return res.json({ ok: true });
-    }
+    if (!user) return res.json({ ok: true });      // aynı cevabı döneriz
 
-    // 2) Token üret
-    const raw  = newToken();       // Kullanıcıya gidecek asıl token
-    const hash = sha256(raw);      // Veritabanında saklanacak hash
+    const raw  = newToken();
+    const hash = sha256(raw);
 
-    // 3) Veritabanına ekle (30 dk sonra süresi dolacak)
     await db.promise().query(
       `INSERT INTO password_resets (user_id, token_hash, expires_at)
        VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))`,
       [user.id, hash]
     );
 
-    // 4) Linkleri hazırla
-    const deepLinkScheme = `bookifyapp://reset?token=${raw}`;
-    const webLink        = `https://projembackend-production-4549.up.railway.app/reset?token=${raw}`;
+    const deepLink = `bookifyapp://reset?token=${raw}`;
+    const webLink  = `https://projembackend-production-4549.up.railway.app/reset?token=${raw}`;
 
-    // 5) Mail gönder (hem text hem html)
     await sgMail.send({
       to: email,
-      from: process.env.SENDGRID_FROM,    // .env’deki onaylı adres
+      from: process.env.SENDGRID_FROM,
       subject: 'Şifre Sıfırlama Bağlantınız',
-      text: `
-Merhaba,
+      text:
+`Merhaba,
 
-Şifrenizi 30 dk içinde sıfırlamak için lütfen bu linki tıklayın veya kopyala-yapıştır yapın:
+Şifrenizi 30 dk içinde sıfırlamak için bu linki açın:
 ${webLink}
 
 Uygulamada otomatik açmak isterseniz:
-${deepLinkScheme}
-      `,
-      html: `
-<p>Merhaba,</p>
-<p>Şifrenizi 30&nbsp;dk içinde sıfırlamak için <a href="${webLink}">buraya tıklayın</a>.</p>
+${deepLink}`,
+      html:
+`<p>Merhaba,</p>
+<p>Şifrenizi 30&nbsp;dk içinde sıfırlamak için
+<a href="${webLink}">buraya tıklayın</a>.</p>
 <p><strong>Uygulamada açmak için:</strong><br>
-<code>${deepLinkScheme}</code></p>
-<p>Link çalışmazsa kopyalayıp tarayıcınıza veya mobil cihazınıza yapıştırabilirsiniz.</p>
-      `
+<code>${deepLink}</code></p>`
     });
 
-    // (İsteğe bağlı) Konsola debug linki yaz
-    console.log(`🔗 Reset link (scheme): ${deepLinkScheme}`);
-    console.log(`🔗 Reset link (web):    ${webLink}`);
+    console.log(`🔗 Reset link (web):  ${webLink}`);
+    console.log(`🔗 Reset link (deep): ${deepLink}`);
 
     return res.json({ ok: true });
   } catch (err) {
     console.error('POST /api/auth/forgot error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
+    res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
 
+/* 🔹 YENİ: Tarayıcı linki uygulama şemasına yönlendirir */
+app.get('/reset', (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).send('Token eksik');
+
+  const deep = `bookifyapp://reset?token=${token}`;
+
+  res.send(`<!DOCTYPE html>
+<html lang="tr"><head>
+<meta charset="utf-8"/>
+<meta http-equiv="refresh" content="0;url=${deep}">
+<title>Bookify – Şifre Sıfırla</title>
+<style>body{font-family:sans-serif;text-align:center;margin-top:50px}a{color:#0066cc;font-size:18px}</style>
+</head><body>
+<p>Uygulama açılmazsa <a href="${deep}">buraya dokun</a>.</p>
+</body></html>`);
+});
 
 // -------------------- Reset Password --------------------
 app.post('/api/auth/reset', async (req, res) => {
@@ -187,7 +183,8 @@ app.post('/api/auth/reset', async (req, res) => {
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
-router.get('/api/recommendations/:userId', async (req, res) => {
+
+app.get('/api/recommendations/:userId', async (req, res) => {
   const userId = parseInt(req.params.userId, 10);
   try {
     const [rows] = await db.promise().query(
@@ -200,7 +197,7 @@ router.get('/api/recommendations/:userId', async (req, res) => {
     res.status(500).json({ ok: false, error: 'Veritabanı okunamadı.' });
   }
 });
-module.exports = router;
+
 // -------------------- Login Route (bcrypt ile) --------------------
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -237,7 +234,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // -------------------- Signup Route (bcrypt) --------------------
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', async (req, res) => {  
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
