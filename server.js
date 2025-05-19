@@ -112,23 +112,22 @@ ${deepLink}`,
   }
 });
 
-/* 🔹 YENİ: Tarayıcı linki uygulama şemasına yönlendirir */
+// -------------------- /reset  (deep-link redirect) --------------------
 app.get('/reset', (req, res) => {
   const { token } = req.query;
-  if (!token) return res.status(400).send('Token eksik');
 
-  const deep = `bookifyapp://reset?token=${token}`;
+  // Parametre kontrolü
+  if (!token) {
+    return res.status(400).send('Token eksik');
+  }
 
-  res.send(`<!DOCTYPE html>
-<html lang="tr"><head>
-<meta charset="utf-8"/>
-<meta http-equiv="refresh" content="0;url=${deep}">
-<title>Bookify – Şifre Sıfırla</title>
-<style>body{font-family:sans-serif;text-align:center;margin-top:50px}a{color:#0066cc;font-size:18px}</style>
-</head><body>
-<p>Uygulama açılmazsa <a href="${deep}">buraya dokun</a>.</p>
-</body></html>`);
+  // Uygulama şeması (Android / iOS tarafından yakalanacak)
+  const deepLink = `bookifyapp://reset?token=${token}`;
+
+  // 302 Found → tarayıcıyı doğrudan özel şemaya yönlendir
+  res.redirect(302, deepLink);
 });
+
 
 // -------------------- Reset Password --------------------
 app.post('/api/auth/reset', async (req, res) => {
