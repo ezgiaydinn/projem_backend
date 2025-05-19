@@ -112,20 +112,40 @@ ${deepLink}`,
   }
 });
 
-// -------------------- /reset  (deep-link redirect) --------------------
+// 🔹 A Seçeneği: Meta-refresh + JS fallback + tıklanabilir link
 app.get('/reset', (req, res) => {
   const { token } = req.query;
-
-  // Parametre kontrolü
   if (!token) {
     return res.status(400).send('Token eksik');
   }
 
-  // Uygulama şeması (Android / iOS tarafından yakalanacak)
   const deepLink = `bookifyapp://reset?token=${token}`;
 
-  // 302 Found → tarayıcıyı doğrudan özel şemaya yönlendir
-  res.redirect(302, deepLink);
+  res.send(`<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"/>
+  <title>Bookify – Şifre Sıfırla</title>
+
+  <!-- 1) Meta-refresh ile otomatik yönlendirme -->
+  <meta http-equiv="refresh" content="0;url=${deepLink}">
+
+  <!-- 2) JS fallback (tarayıcılar meta‐refresh’i desteklemezse) -->
+  <script>
+    window.location.href = "${deepLink}";
+  </script>
+
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+    a    { color: #0066cc; font-size: 18px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <p>Uygulama otomatik açılmazsa, lütfen  
+     <a href="${deepLink}">buraya dokunun</a>.
+  </p>
+</body>
+</html>`);
 });
 
 
