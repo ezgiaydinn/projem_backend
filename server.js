@@ -252,38 +252,69 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// -------------------- Signup Route (bcrypt) --------------------
-app.post('/api/auth/signup', async (req, res) => {  
+// -------------------- Signup Route (with e-posta doğrulama) --------------------
+app.post('/api/auth/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
     }
 
-    /* 1) E-posta kullanımda mı? */
+    // 1) E-posta kullanımda mı?
     const [[exists]] = await db.promise().query(
-      'SELECT 1 FROM users WHERE email = ?',
-      [email]
+      'SELECT 1 FROM users WHERE email = ?', [email]
     );
     if (exists) {
       return res.status(409).json({ error: 'Bu e-posta zaten kullanılıyor.' });
     }
 
-    /* 2) Şifreyi hash’le */
-    const pwdHash = await hashPwd(password);   // bcrypt.hash(pwd, 12)
+    // 2) Şifreyi hash'le
+    const pwdHash = await hashPwd(password);
 
-    /* 3) Kullanıcıyı ekle */
-    await db.promise().query(
-      'INSERT INTO users (name, email, password) VALUES (?,?,?)',
+    // 3) Kullanıcıyı ekle ve insertId’yi al
+    const [result] = await db.promise().query(
+      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
       [name, email, pwdHash]
     );
+    const newUserId = result.insertId;
 
-    return res.status(201).json({ message: 'Kullanıcı başarıyla kaydedildi.' });
+    // 4) Doğrulama token'ı üret, hash'le ve kaydet
+    const rawToken   = newToken();
+    const tokenHash  = sha256(rawToken);
+    await db.promise().query(
+      `INSERT INTO email_verifications
+         (user_id, token_hash, expires_at)
+       VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR))`,
+      [newUserId, tokenHash]
+    );
+
+    // 5) Doğrulama e-postası hazırla ve gönder
+    const webVerifyLink  = `https://projembackend-production-4549.up.railway.app/verify?token=${rawToken}`;
+    const deepVerifyLink = `bookifyapp://verify?token=${rawToken}`;
+
+    await sgMail.send({
+      to: email,
+      from: process.env.SENDGRID_FROM,
+      subject: 'Bookify – E-posta Doğrulama',
+      html: `
+        <p>Merhaba ${name},</p>
+        <p>Hesabını aktifleştirmek için <a href="${webVerifyLink}">buraya tıkla</a>.</p>
+        <p>Uygulamada açmak istersen:</p>
+        <code>${deepVerifyLink}</code>
+      `
+    });
+
+    // 6) Son kullanıcıya not ver
+    return res.status(201).json({
+      message: 'Kayıt başarılı! Lütfen e-postanı kontrol edip hesabını doğrula.'
+    });
+
   } catch (err) {
     console.error('POST /api/auth/signup error:', err);
-    res.status(500).json({ error: 'Sunucu hatası.' });
+    return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+
 
 // ----------- Kullanıcının puan verilerini döner -----------
 app.get('/api/ratings/:userId', async (req, res) => {
