@@ -755,6 +755,27 @@ app.post('/api/library/remove', async (req, res) => {
   }
 });
 
+// kullanıcı silme (server üzerinden)
+app.delete('/api/auth/users/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    // 1) (Opsiyonel) Bağlı tabloları temizle, eğer cascade yoksa
+    await db.promise().query('DELETE FROM password_resets      WHERE user_id = ?', [userId]);
+    await db.promise().query('DELETE FROM email_verifications WHERE user_id = ?', [userId]);
+    await db.promise().query('DELETE FROM favorites            WHERE user_id = ?', [userId]);
+    await db.promise().query('DELETE FROM librarys             WHERE user_id = ?', [userId]);
+    await db.promise().query('DELETE FROM ratings              WHERE user_id = ?', [userId]);
+    // 2) Kullanıcıyı sil
+    await db.promise().query('DELETE FROM users WHERE id = ?', [userId]);
+
+    return res.json({ ok: true, message: 'Kullanıcı ve bağlı kayıtlar silindi.' });
+  } catch (err) {
+    console.error('DELETE /api/auth/users error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+
+
 // ----------------- Sunucuyu başlat --------------------
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
