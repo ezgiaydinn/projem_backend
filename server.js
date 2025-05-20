@@ -315,7 +315,93 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
+// -------------------- E-posta Doğrulama (web→app) --------------------
+app.get('/verify', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).send('Token eksik');
 
+    // 1) hash’le, geçerli kayıt var mı?
+    const tokenHash = sha256(token);
+    const [[row]] = await db.promise().query(
+      `SELECT user_id
+         FROM email_verifications
+        WHERE token_hash = ?
+          AND expires_at > NOW()`,
+      [tokenHash]
+    );
+    if (!row) {
+      return res.status(400).send('Geçersiz veya süresi dolmuş token.');
+    }
+
+    // 2) kullanıcıyı verified yap
+    await db.promise().query(
+      'UPDATE users SET is_verified = TRUE WHERE id = ?',
+      [row.user_id]
+    );
+    // 3) tek kullanımlık kodu sil
+    await db.promise().query(
+      'DELETE FROM email_verifications WHERE token_hash = ?',
+      [tokenHash]
+    );
+
+    // 4) Uygulamayı açacak deep-link
+    const deepLink = `bookifyapp://verified`;
+
+    // 5) Meta-refresh + JS + tıklanabilir link
+    return res.send(`<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"/>
+  <title>Bookify – E-posta Doğrulama</title>
+  <meta http-equiv="refresh" content="0;url=${deepLink}">
+  <script>window.location.href='${deepLink}';</script>
+  <style>body{font-family:sans-serif;text-align:center;margin-top:50px}a{color:#0066cc;font-size:18px}</style>
+</head>
+<body>
+  <p>Hesabınız doğrulandı! Uygulama açılmazsa <a href="${deepLink}">buraya dokunun</a>.</p>
+</body>
+</html>`);
+  } catch (err) {
+    console.error('GET /verify error:', err);
+    return res.status(500).send('Sunucu hatası.');
+  }
+});
+
+// -------------------- API: E-posta Doğrulama --------------------
+app.post('/api/auth/verify', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token gerekli.' });
+
+    const tokenHash = sha256(token);
+    const [[row]] = await db.promise().query(
+      `SELECT user_id
+         FROM email_verifications
+        WHERE token_hash = ?
+          AND expires_at > NOW()`,
+      [tokenHash]
+    );
+    if (!row) {
+      return res.status(400).json({ error: 'Geçersiz veya süresi dolmuş token.' });
+    }
+
+    await db.promise().query(
+      'UPDATE users SET is_verified = TRUE WHERE id = ?',
+      [row.user_id]
+    );
+    await db.promise().query(
+      'DELETE FROM email_verifications WHERE token_hash = ?',
+      [tokenHash]
+    );
+
+    return res.json({ ok: true, message: 'E-posta doğrulandı.' });
+  } catch (err) {
+    console.error('POST /api/auth/verify error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+});
+ 
 // ----------- Kullanıcının puan verilerini döner -----------
 app.get('/api/ratings/:userId', async (req, res) => {
   const { userId } = req.params;
