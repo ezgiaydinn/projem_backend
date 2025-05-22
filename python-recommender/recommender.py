@@ -831,7 +831,6 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
 
     if user is None:
         raise credentials_exception
-
     return {
     "email": user["email"],
     "id": user["id"],
