@@ -776,6 +776,12 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: str | None = None
 
+# def create_access_token(data: dict, expires_delta: timedelta | None = None):
+#     to_encode = data.copy()
+#     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+#     to_encode.update({"exp": expire})
+#     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+#     return encoded_jwt
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
@@ -783,7 +789,26 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+# def get_current_user(token: str = Depends(oauth2_scheme)):
+#     credentials_exception = HTTPException(
+#         status_code=status.HTTP_401_UNAUTHORIZED,
+#         detail="Could not validate credentials",
+#         headers={"WWW-Authenticate": "Bearer"},
+#     )
+#     try:
+#         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+#         email: str = payload.get("sub")
+#         if email is None:
+#             raise credentials_exception
+#         token_data = TokenData(email=email)
+#     except JWTError:
+#         raise credentials_exception
+
+#     user = fake_users_db.get(token_data.email)
+#     if user is None:
+#         raise credentials_exception
+#     return user
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -792,17 +817,26 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
-        if email is None:
+        user_id: int = payload.get("id")
+
+        if email is None or user_id is None:
             raise credentials_exception
+
         token_data = TokenData(email=email)
+
     except JWTError:
         raise credentials_exception
 
     user = fake_users_db.get(token_data.email)
+
     if user is None:
         raise credentials_exception
-    return user
 
+    return return {
+    "email": user["email"],
+    "id": user["id"],
+    "name": user["name"]
+    }
 @app.post("/login", response_model=Token)
 @limiter.limit("5/minute")
 def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
@@ -810,8 +844,18 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     if not user or form_data.password != user["password"]:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
-    access_token = create_access_token(data={"sub": user["email"]}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    return {"access_token": access_token, "token_type": "bearer", "user_id": user["id"]}
+    access_token = create_access_token(
+        data={
+            "sub": user["email"],  # ✅ JWT standardı için kritik
+            "id": user["id"]       # 💙 app içinde istersen kullanıcı ID de eklenmiş olur
+        },
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+     return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": user["id"]
+    }
 
 class RecRequest(BaseModel):
     user_id: int
@@ -854,46 +898,107 @@ def get_category_books(category: str, top_n=10):
     return random.sample(df_books['book_id'].tolist(), k=top_n)
 
 # ---- 7) Öneri API'si ----
+# @app.post("/recommend")
+# @limiter.limit("10/minute")
+# def recommend(
+#     req: RecRequest,
+#     request: Request,
+#     fallback: str = Query("popular", enum=["popular", "random", "category"]),
+#     current_user: dict = Depends(get_current_user)
+# ):
+#     user = req.user_id
+#     top_n = req.top_n
+
+#     df_user = df_ratings[df_ratings['user_id'] == user]
+#     if df_user.empty:
+#         # fallback: popular, random, category
+#         if fallback == "popular":
+#             fallback_books = get_popular_books(top_n=top_n)
+#         elif fallback == "random":
+#             fallback_books = get_random_books(top_n=top_n)
+#         else:  # category
+#             fallback_books = get_category_books(category="fiction", top_n=top_n)
+
+#         return {
+#             "recommendations": [
+#                 {"book_id": bid, "score": None, "source": f"fallback:{fallback}"}
+#                 for bid in fallback_books
+#             ]
+#         }
+
+#     seen = set(df_user['book_id'].tolist())
+#     candidates = [bid for bid in df_books['book_id'] if bid not in seen]
+
+#     preds = []
+#     for bid in candidates:
+#         est = algo.predict(uid=user, iid=bid).est
+#         preds.append((bid, est))
+#     preds.sort(key=lambda x: x[1], reverse=True)
+#     top_preds = preds[:top_n]
+
+#     recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
+#     return {"recommendations": recommendations}
 @app.post("/recommend")
 @limiter.limit("10/minute")
 def recommend(
     req: RecRequest,
     request: Request,
     fallback: str = Query("popular", enum=["popular", "random", "category"]),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)  # ✅ Token ile kullanıcı alınır
 ):
-    user = req.user_id
+    user_id = current_user["id"]  # ✅ Token'dan gelen ID
+
+    df_user = df_ratings[df_ratings['user_id'] == user_id]
     top_n = req.top_n
 
-    df_user = df_ratings[df_ratings['user_id'] == user]
     if df_user.empty:
-        # fallback: popular, random, category
+        # fallback önerileri (hiç oy vermemiş kullanıcılar için)
         if fallback == "popular":
             fallback_books = get_popular_books(top_n=top_n)
         elif fallback == "random":
             fallback_books = get_random_books(top_n=top_n)
-        else:  # category
+        else:
             fallback_books = get_category_books(category="fiction", top_n=top_n)
 
         return {
             "recommendations": [
-                {"book_id": bid, "score": None, "source": f"fallback:{fallback}"}
-                for bid in fallback_books
+                {
+                    "book_id": bid,
+                    "score": None,
+                    "source": f"fallback:{fallback}"
+                } for bid in fallback_books
             ]
         }
 
+    # Kullanıcının puanlamadığı kitaplar
     seen = set(df_user['book_id'].tolist())
     candidates = [bid for bid in df_books['book_id'] if bid not in seen]
 
     preds = []
     for bid in candidates:
-        est = algo.predict(uid=user, iid=bid).est
+        est = algo.predict(uid=user_id, iid=bid).est
         preds.append((bid, est))
     preds.sort(key=lambda x: x[1], reverse=True)
     top_preds = preds[:top_n]
 
-    recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
+    # Kitap bilgilerini dahil ederek önerileri döndür
+    recommendations = []
+    for bid, score in top_preds:
+        book = df_books[df_books['book_id'] == bid].iloc[0].to_dict()
+        recommendations.append({
+            "book_id": bid,
+            "score": round(score, 3),
+            "title": book.get("title", ""),
+            "authors": book.get("authors", ""),
+            "thumbnail_url": book.get("thumbnail_url", ""),
+            "description": book.get("description", ""),
+            "publisher": book.get("publisher", ""),
+            "publishedDate": book.get("publishedDate", ""),
+            "pageCount": book.get("pageCount", 0),
+        })
+
     return {"recommendations": recommendations}
+
 
 # ---- 8) Rating ekleyip modeli yeniden eğiten endpoint ----
 @app.post("/rate")
