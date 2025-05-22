@@ -704,21 +704,23 @@
 ##### yeni kullanıcı için 3 fallback öneri #############################
 # ✅ Bookify Recommender Service – Çok Kullanıcılı, Fallback Destekli ve Model Güncelleme Özellikli
 
+# ✅ Bookify Recommender Service – Çok Kullanıcılı, Fallback Destekli ve Model Güncelleme Özellikli
+
 import os
-from dotenv import load_dotenv # type: ignore
-from fastapi import FastAPI, HTTPException, Depends, status, Request, Query # type: ignore
-from fastapi.responses import RedirectResponse # type: ignore
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm # type: ignore
-from fastapi.middleware.cors import CORSMiddleware # type: ignore
-from jose import JWTError, jwt # type: ignore
-from pydantic import BaseModel # type: ignore
-import pandas as pd # type: ignore
-from sqlalchemy import create_engine # type: ignore
-from surprise import Dataset, Reader, SVD # type: ignore
-from datetime import datetime, timedelta # type: ignore
-from slowapi import Limiter, _rate_limit_exceeded_handler # type: ignore
-from slowapi.util import get_remote_address # type: ignore
-from slowapi.errors import RateLimitExceeded # type: ignore
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Depends, status, Request, Query
+from fastapi.responses import RedirectResponse
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
+from jose import JWTError, jwt
+from pydantic import BaseModel
+import pandas as pd
+from sqlalchemy import create_engine
+from surprise import Dataset, Reader, SVD
+from datetime import datetime, timedelta
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import random
 
 # ---- Ortam değişkenlerini yükle ----
@@ -893,6 +895,41 @@ def recommend(
     return {"recommendations": recommendations}
 
 # ---- Oy Ekleyip Modeli Güncelle ----
+# ---- 10) Tüm Kullanıcılar İçin Önerileri Üreten ve Kaydeden Fonksiyon ----
+def generate_all_recommendations(top_n=10):
+    global df_ratings, df_books
+    df_ratings = pd.read_sql("SELECT user_id, book_id, rating FROM ratings", engine)
+    df_books = pd.read_sql("SELECT id AS book_id FROM books", engine)
+
+    user_ids = df_ratings['user_id'].unique()
+    all_recommendations = []
+
+    for user in user_ids:
+        seen = set(df_ratings[df_ratings['user_id'] == user]['book_id'])
+        candidates = [bid for bid in df_books['book_id'] if bid not in seen]
+
+        preds = [(bid, algo.predict(uid=user, iid=bid).est) for bid in candidates]
+        preds.sort(key=lambda x: x[1], reverse=True)
+        top_preds = preds[:top_n]
+
+        for bid, score in top_preds:
+            all_recommendations.append((user, bid, round(score, 3)))
+
+    # Veritabanına yaz
+    query = """
+    INSERT INTO recommendations (user_id, book_id, score)
+    VALUES (%s, %s, %s)
+    ON DUPLICATE KEY UPDATE score = VALUES(score)
+    """
+    with engine.begin() as conn:
+        conn.execute("DELETE FROM recommendations")  # eski önerileri sil
+        conn.executemany(query, all_recommendations)
+
+@app.post("/recommend/generate_all")
+def generate_all():
+    generate_all_recommendations()
+    return {"message": "All user recommendations generated and saved to DB."}
+
 @app.post("/rate")
 def add_rating(data: RatingInput):
     query = """
@@ -906,7 +943,7 @@ def add_rating(data: RatingInput):
 
 # ---- Local veya Railway için ----
 if __name__ == "__main__":
-    import uvicorn # type: ignore
+    import uvicorn
     port = int(os.environ.get("PORT", 8000))
     print("✅ Bookify Recommender Service is starting on port", port)
-    uvicorn.run("recommender:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("recommender_full_cleaned:app", host="0.0.0.0", port=port, reload=False)
