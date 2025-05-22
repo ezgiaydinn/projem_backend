@@ -917,7 +917,7 @@ def generate_all_recommendations(top_n=10):
             all_recommendations.append((user, bid, round(score, 3)))
 
     # Veritabanına yaz
-   query = '''
+query = '''
 INSERT INTO recommendations (user_id, book_id, score)
 VALUES (%s, %s, %s)
 ON DUPLICATE KEY UPDATE score = VALUES(score)
