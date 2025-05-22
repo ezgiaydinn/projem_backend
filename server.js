@@ -817,7 +817,7 @@ app.delete('/api/auth/users/:userId', async (req, res) => {
 });
 //-----------------öneri-------------------
 // Varsayım: Öneri tablosu ve kitaplar ilişkili
-router.get('/api/recommendations', async (req, res) => {
+app.get('/api/recommendations', async (req, res) => {
   const userId = parseInt(req.query.userId, 10);
 
   if (!userId) {
@@ -849,7 +849,6 @@ router.get('/api/recommendations', async (req, res) => {
   }
 });
 
-module.exports = router;
 
 
 // ----------------- Sunucuyu başlat --------------------
