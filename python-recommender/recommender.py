@@ -976,7 +976,7 @@ for user_id in user_ids:
             VALUES (%s, %s, %s, %s)
         """, (
             int(user_id),
-            int(book_id),
+            str(book_id),
             float(score),
             "svd"
         ))
