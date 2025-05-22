@@ -788,6 +788,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
+        print("🔍 GÖNDERİLEN TOKEN:", token)
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -795,6 +796,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         if email is None:
             raise credentials_exception
         token_data = TokenData(email=email)
+        print("🎯 DECODED PAYLOAD:", payload)
+
     except JWTError:
         raise credentials_exception
 
