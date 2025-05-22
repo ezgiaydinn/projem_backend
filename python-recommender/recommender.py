@@ -831,11 +831,13 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
 
     if user is None:
         raise credentials_exception
-    return {
-    "email": user["email"],
-    "id": user["id"],
-    "name": user["name"]
+
+    return {  # ← bu satır artık doğru hizada
+        "email": user["email"],
+        "id": user["id"],
+        "name": user["name"]
     }
+
 @app.post("/login", response_model=Token)
 @limiter.limit("5/minute")
 def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
