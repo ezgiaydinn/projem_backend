@@ -702,24 +702,26 @@
 #     print("✅ Bookify Recommender Service is starting on port", port)
 #     uvicorn.run("recommender:app", host="0.0.0.0", port=port, reload=False)
 ##### yeni kullanıcı için 3 fallback öneri #############################
+# ✅ Bookify Recommender Service – Çok Kullanıcılı, Fallback Destekli ve Model Güncelleme Özellikli
+
 import os
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends, status, Request, Query
-from fastapi.responses import RedirectResponse
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.middleware.cors import CORSMiddleware
-from jose import JWTError, jwt
-from pydantic import BaseModel
-import pandas as pd
-from sqlalchemy import create_engine
-from surprise import Dataset, Reader, SVD
-from datetime import datetime, timedelta
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+from dotenv import load_dotenv # type: ignore
+from fastapi import FastAPI, HTTPException, Depends, status, Request, Query # type: ignore
+from fastapi.responses import RedirectResponse # type: ignore
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
+from jose import JWTError, jwt # type: ignore
+from pydantic import BaseModel # type: ignore
+import pandas as pd # type: ignore
+from sqlalchemy import create_engine # type: ignore
+from surprise import Dataset, Reader, SVD # type: ignore
+from datetime import datetime, timedelta # type: ignore
+from slowapi import Limiter, _rate_limit_exceeded_handler # type: ignore
+from slowapi.util import get_remote_address # type: ignore
+from slowapi.errors import RateLimitExceeded # type: ignore
 import random
 
-# ---- 1) Ortam değişkenlerini yükle ----
+# ---- Ortam değişkenlerini yükle ----
 load_dotenv(dotenv_path=".env")
 
 DB_HOST     = os.getenv("DB_HOST")
@@ -731,20 +733,19 @@ SECRET_KEY  = os.getenv("SECRET_KEY", "mysecretkey")
 ALGORITHM   = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# ---- 2) SQLAlchemy engine ----
+# ---- SQLAlchemy engine ----
 engine = create_engine(
     f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
-# ---- 3) FastAPI uygulaması ----
+# ---- FastAPI Uygulaması ----
 app = FastAPI(title="Bookify Recommender Service")
 
-# ---- 3.1) Rate limiter setup ----
+# ---- Rate Limiting ve CORS ----
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# ---- 3.2) CORS (opsiyonel) ----
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -757,7 +758,7 @@ app.add_middleware(
 async def root():
     return RedirectResponse(url="/docs")
 
-# ---- 4) Authentication yapısı ----
+# ---- Authentication ----
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 fake_users_db = {
@@ -822,7 +823,7 @@ class RatingInput(BaseModel):
     book_id: str
     rating: float
 
-# ---- 5) Modeli eğitmek için fonksiyon ----
+# ---- Modeli Eğit ----
 def train_model():
     global algo, df_ratings, df_books
     df_ratings = pd.read_sql("SELECT user_id, book_id, rating FROM ratings", engine)
@@ -832,12 +833,10 @@ def train_model():
     trainset = data.build_full_trainset()
     algo = SVD(n_factors=50, n_epochs=20)
     algo.fit(trainset)
-    return "Model retrained"
 
-# İlk başta model yükleniyor
 train_model()
 
-# ---- 6) Yardımcı fonksiyonlar ----
+# ---- Yardımcı Fonksiyonlar ----
 def get_popular_books(top_n=10):
     popular = (df_ratings['book_id']
                .value_counts()
@@ -850,10 +849,9 @@ def get_random_books(top_n=10):
     return random.sample(df_books['book_id'].tolist(), k=top_n)
 
 def get_category_books(category: str, top_n=10):
-    # Şu anda category dummy filtre olarak çalışıyor, istersen category alanı eklenebilir
     return random.sample(df_books['book_id'].tolist(), k=top_n)
 
-# ---- 7) Öneri API'si ----
+# ---- Öneri API'si ----
 @app.post("/recommend")
 @limiter.limit("10/minute")
 def recommend(
@@ -867,12 +865,11 @@ def recommend(
 
     df_user = df_ratings[df_ratings['user_id'] == user]
     if df_user.empty:
-        # fallback: popular, random, category
         if fallback == "popular":
             fallback_books = get_popular_books(top_n=top_n)
         elif fallback == "random":
             fallback_books = get_random_books(top_n=top_n)
-        else:  # category
+        else:
             fallback_books = get_category_books(category="fiction", top_n=top_n)
 
         return {
@@ -895,7 +892,7 @@ def recommend(
     recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
     return {"recommendations": recommendations}
 
-# ---- 8) Rating ekleyip modeli yeniden eğiten endpoint ----
+# ---- Oy Ekleyip Modeli Güncelle ----
 @app.post("/rate")
 def add_rating(data: RatingInput):
     query = """
@@ -907,9 +904,9 @@ def add_rating(data: RatingInput):
     train_model()
     return {"message": "Rating added and model retrained."}
 
-# ---- 9) Local veya Railway test için ----
+# ---- Local veya Railway için ----
 if __name__ == "__main__":
-    import uvicorn
+    import uvicorn # type: ignore
     port = int(os.environ.get("PORT", 8000))
     print("✅ Bookify Recommender Service is starting on port", port)
-    uvicorn.run("recommender:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("recommender_full_cleaned:app", host="0.0.0.0", port=port, reload=False)
