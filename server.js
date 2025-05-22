@@ -815,6 +815,41 @@ app.delete('/api/auth/users/:userId', async (req, res) => {
     return res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+//-----------------öneri-------------------
+// Varsayım: Öneri tablosu ve kitaplar ilişkili
+router.get('/api/recommendations', async (req, res) => {
+  const userId = parseInt(req.query.userId, 10);
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId gerekli' });
+  }
+
+  try {
+    const [recs] = await db.promise().query(`
+      SELECT 
+        r.book_id,
+        r.score,
+        b.title,
+        b.authors,
+        b.thumbnail_url,
+        b.publisher,
+        b.published_date,
+        b.description
+      FROM recommendations r
+      JOIN books b ON r.book_id = b.id
+      WHERE r.user_id = ?
+      ORDER BY r.score DESC
+      LIMIT 10
+    `, [userId]);
+
+    return res.json(recs);
+  } catch (err) {
+    console.error('Öneri çekme hatası:', err);
+    return res.status(500).json({ error: 'Sunucu hatası' });
+  }
+});
+
+module.exports = router;
 
 
 // ----------------- Sunucuyu başlat --------------------
