@@ -946,4 +946,4 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     print("✅ Bookify Recommender Service is starting on port", port)
-    uvicorn.run("recommender_full_cleaned:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("recommender:app", host="0.0.0.0", port=port, reload=False)
