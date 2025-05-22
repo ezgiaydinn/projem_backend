@@ -721,6 +721,7 @@ from datetime import datetime, timedelta
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import text  # yukarıya ekle
 import random
 
 # ---- Ortam değişkenlerini yükle ----
@@ -921,9 +922,11 @@ def generate_all_recommendations(top_n=10):
     VALUES (%s, %s, %s)
     ON DUPLICATE KEY UPDATE score = VALUES(score)
     """
-    with engine.begin() as conn:
-        conn.execute("DELETE FROM recommendations")  # eski önerileri sil
-        conn.executemany(query, all_recommendations)
+    
+
+with engine.begin() as conn:
+    conn.execute(text("DELETE FROM recommendations"))
+    conn.execute(text(query), all_recommendations)
 
 @app.post("/recommend/generate_all")
 def generate_all():
