@@ -962,10 +962,10 @@ for user_id in user_ids:
     user_seen = df_ratings[df_ratings['user_id'] == user_id]['book_id'].tolist()
     unseen_books = [bid for bid in book_ids if bid not in user_seen]
 
-   predictions = [
+    predictions = [
     (book_id, model.predict(uid=str(user_id), iid=str(book_id)).est)
     for book_id in book_ids
-]
+    ]
 
     predictions.sort(key=lambda x: x[1], reverse=True)
     top_n = predictions[:10]
