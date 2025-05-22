@@ -917,13 +917,16 @@ def generate_all_recommendations(top_n=10):
             all_recommendations.append((user, bid, round(score, 3)))
 
     # Veritabanına yaz
-query = '''
-INSERT INTO recommendations (user_id, book_id, score)
-VALUES (%s, %s, %s)
-ON DUPLICATE KEY UPDATE score = VALUES(score)
-'''
-conn.execute(text("DELETE FROM recommendations"))
-conn.execute(text(query), all_recommendations)
+with engine.begin() as conn:
+    conn.execute(text("DELETE FROM recommendations"))
+    
+    query = '''
+    INSERT INTO recommendations (user_id, book_id, score)
+    VALUES (%s, %s, %s)
+    ON DUPLICATE KEY UPDATE score = VALUES(score)
+    '''
+    
+    conn.execute(text(query), all_recommendations)
 
 @app.post("/recommend/generate_all")
 def generate_all():
