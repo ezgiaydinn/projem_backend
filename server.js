@@ -459,6 +459,26 @@ app.get('/api/ratings/:userId', async (req, res) => {
       res.status(500).json({ error: 'Veritabanı hatası.' });
     });
 });
+app.post('/api/ratings/save', async (req, res) => {
+  const { userId, bookId, rating } = req.body;
+
+  if (!userId || !bookId || rating == null) {
+    return res.status(400).json({ error: 'userId, bookId ve rating zorunlu.' });
+  }
+
+  try {
+    const sql = `
+      INSERT INTO ratings (user_id, book_id, rating)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE rating = ?
+    `;
+    await db.promise().query(sql, [userId, bookId, rating, rating]);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Rating kaydetme hatası:', err);
+    res.status(500).json({ error: 'Veritabanı hatası.' });
+  }
+});
 
 // ------------------- Profile Route -------------------
 app.get('/api/auth/profile/:userId', (req, res) => {
