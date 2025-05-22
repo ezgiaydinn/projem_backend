@@ -918,14 +918,12 @@ def generate_all_recommendations(top_n=10):
 
     # Veritabanına yaz
 with engine.begin() as conn:
-    conn.execute(text("DELETE FROM recommendations"))
-    
     query = '''
     INSERT INTO recommendations (user_id, book_id, score)
     VALUES (%s, %s, %s)
     ON DUPLICATE KEY UPDATE score = VALUES(score)
     '''
-    
+    conn.execute(text("DELETE FROM recommendations"))
     conn.execute(text(query), all_recommendations)
 
 @app.post("/recommend/generate_all")
