@@ -910,78 +910,79 @@
 #     port = int(os.environ.get("PORT", 8000))
 #     print("✅ Bookify Recommender Service is starting on port", port)
 #     uvicorn.run("recommender:app", host="0.0.0.0", port=port, reload=False)
+# recommender.py (güncellenmiş)
+
 import os
+import json
 import pandas as pd
-from sqlalchemy import create_engine
+import mysql.connector
 from surprise import Dataset, Reader, SVD
 from dotenv import load_dotenv
-import mysql.connector
 
-# Load environment variables
-load_dotenv(dotenv_path=".env")
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_USER = os.getenv("DB_USER")
+# Ortam değişkenlerini yükle
+load_dotenv()
+
+DB_HOST     = os.getenv("DB_HOST")
+DB_PORT     = os.getenv("DB_PORT")
+DB_USER     = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME")
+DB_NAME     = os.getenv("DB_NAME")
 
-# SQLAlchemy engine for pandas
-engine = create_engine(
-    f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-)
-
-# MySQL connection for inserting recommendations
+# Veritabanı bağlantısı
 conn = mysql.connector.connect(
-    host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, port=int(DB_PORT)
+    host=DB_HOST,
+    port=DB_PORT,
+    user=DB_USER,
+    password=DB_PASSWORD,
+    database=DB_NAME
 )
 cursor = conn.cursor()
 
-# Read ratings data
-df_ratings = pd.read_sql("SELECT user_id, book_id, rating FROM ratings", engine)
+# Ratings verisini al
+df_ratings = pd.read_sql("SELECT user_id, book_id, rating FROM ratings", conn)
 
-# Prepare Surprise dataset
+# Surprise dataset hazırla
 reader = Reader(rating_scale=(1, 5))
 data = Dataset.load_from_df(df_ratings[['user_id', 'book_id', 'rating']], reader)
 trainset = data.build_full_trainset()
 
-# Train the SVD model
-algo = SVD(n_factors=50, n_epochs=20)
-algo.fit(trainset)
+# Modeli eğit
+model = SVD()
+model.fit(trainset)
 
-# Get all distinct book IDs
-df_books = pd.read_sql("SELECT id as book_id FROM books", engine)
-all_books = set(df_books['book_id'])
-
-# Get unique user IDs from ratings
+# Kullanıcıları al
 user_ids = df_ratings['user_id'].unique()
+book_ids = df_ratings['book_id'].unique()
 
-# Clear old recommendations
-cursor.execute("DELETE FROM recommendations")
-conn.commit()
-
-# Generate and store recommendations for each user
+# Her kullanıcı için tahmin yap ve recommendations tablosuna yaz
 for user_id in user_ids:
     print(f"Generating recommendations for user {user_id}...")
+    cursor.execute("DELETE FROM recommendations WHERE user_id = %s", (int(user_id),))
 
-    # Get books the user has already rated
-    seen_books = set(df_ratings[df_ratings['user_id'] == user_id]['book_id'])
-    unseen_books = list(all_books - seen_books)
+    user_seen = df_ratings[df_ratings['user_id'] == user_id]['book_id'].tolist()
+    unseen_books = [bid for bid in book_ids if bid not in user_seen]
 
-    preds = []
-    for book_id in unseen_books:
-        pred = algo.predict(uid=user_id, iid=book_id)
-        preds.append((book_id, pred.est))
+    predictions = [
+        (book_id, model.predict(uid=int(user_id), iid=int(book_id)).est)
+        for book_id in unseen_books
+    ]
 
-    preds.sort(key=lambda x: x[1], reverse=True)
-    top_preds = preds[:10]
+    predictions.sort(key=lambda x: x[1], reverse=True)
+    top_n = predictions[:10]
 
-    # Insert into DB
-    for book_id, score in top_preds:
-        cursor.execute(
-            "INSERT INTO recommendations (user_id, book_id, score, source) VALUES (%s, %s, %s, %s)",
-            (user_id, book_id, round(score, 3), 'svd')
-        )
+    for book_id, score in top_n:
+        cursor.execute("""
+            INSERT INTO recommendations (user_id, book_id, score, source)
+            VALUES (%s, %s, %s, %s)
+        """, (
+            int(user_id),
+            int(book_id),
+            float(score),
+            "svd"
+        ))
 
 conn.commit()
 cursor.close()
 conn.close()
+print("✅ Recommendations updated.")
+
