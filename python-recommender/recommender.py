@@ -1010,7 +1010,8 @@ def recommend(
     request: Request,
     fallback: str = Query("popular", enum=["popular", "random", "category"]),
     current_user: dict = Depends(get_current_user)  # ✅ Token ile kullanıcı alınır
-):
+): 
+    print("🔐 Gelen Authorization:", request.headers.get("authorization"))
     import mysql.connector
     from datetime import datetime
     import os
