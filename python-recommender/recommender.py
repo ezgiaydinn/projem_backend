@@ -845,7 +845,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         
         return user  # dilersen .id olarak da dönebilirsin
 
-    except JWTError:
+    except JWTError as e:
+        print("❌ Token decode hatası:", str(e))
         raise credentials_exception
 
 @app.post("/login", response_model=Token)
