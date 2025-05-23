@@ -826,6 +826,7 @@ def get_user_by_email(email: str):
     return session.query(User).filter(User.email == email).first()
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
+    print("📦 Token geldi mi?:", token)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Geçersiz token",
@@ -833,6 +834,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print("📬 Payload çözüldü:", payload)
         email: str = payload.get("email")
         if email is None:
             raise credentials_exception
