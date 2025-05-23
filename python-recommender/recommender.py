@@ -793,7 +793,8 @@ class TokenData(BaseModel):
 #     return encoded_jwt
 def create_access_token(user_id: int):
     to_encode = {
-        "sub": str(user_id),
+        "sub": user_id,               # 👈 Artık `id` değil, `sub`
+        "email": email,               # (isteğe bağlı)
         "iat": datetime.utcnow(),
         "exp": datetime.utcnow() + timedelta(minutes=30)
     }
@@ -856,9 +857,10 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     if not user or form_data.password != user["password"]:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
-    access_token = create_access_token(user.id)
+    access_token = create_access_token(data={"sub": user["id"], "email": user["email"]},  # 👈 sub kullanıyoruz!
+    expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     # access_token = create_access_token(
-    # data={"sub": user["email"], "id": user["id"]},  # 👈 sub kullanıyoruz!
+    # data={"sub": user["id"], "email": user["email"]},  # 👈 sub kullanıyoruz!
     # expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     # )
     return {
