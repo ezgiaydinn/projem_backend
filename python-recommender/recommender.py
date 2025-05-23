@@ -1006,6 +1006,7 @@ def get_category_books(category: str, top_n=10):
 @app.post("/recommend")
 @limiter.limit("10/minute")
 def recommend(
+    print("user_id:", user_id)
     req: RecRequest,
     request: Request,
     fallback: str = Query("popular", enum=["popular", "random", "category"]),
