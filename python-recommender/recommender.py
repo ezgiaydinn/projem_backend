@@ -1012,13 +1012,8 @@ def recommend(
     current_user: dict = Depends(get_current_user)  # ✅ Token ile kullanıcı alınır
 ): 
     print("🔐 Gelen Authorization:", request.headers.get("authorization"))
-    import mysql.connector
-    from datetime import datetime
-    import os
-    from dotenv import load_dotenv
-
-    load_dotenv()
-    print("🔐 Gelen Authorization:", request.headers.get("authorization"))
+    
+    
     user_id = current_user["id"]  # ✅ Token'dan gelen ID
 
     df_user = df_ratings[df_ratings['user_id'] == user_id]
