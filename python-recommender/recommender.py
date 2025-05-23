@@ -854,11 +854,10 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     if not user or form_data.password != user["password"]:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
-    access_token = create_access_token(user.id
-      expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    access_token = create_access_token(user.id)
     # access_token = create_access_token(
     # data={"sub": user["email"], "id": user["id"]},  # 👈 sub kullanıyoruz!
-    # 
+    # expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     # )
     return {
         "access_token": access_token,
