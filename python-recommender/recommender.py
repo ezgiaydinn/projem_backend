@@ -847,12 +847,9 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
     access_token = create_access_token(
-        data={
-            "sub": user["email"],  # ✅ JWT standardı için kritik
-            "id": user["id"]       # 💙 app içinde istersen kullanıcı ID de eklenmiş olur
-        },
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
+    data={"sub": user["email"], "id": user["id"]},  # 👈 EKLENDİ
+    expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+)
     return {
         "access_token": access_token,
         "token_type": "bearer",
