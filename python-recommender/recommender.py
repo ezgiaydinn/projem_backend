@@ -947,6 +947,7 @@ def recommend(
     fallback: str = Query("popular", enum=["popular", "random", "category"]),
     current_user: dict = Depends(get_current_user)  # ✅ Token ile kullanıcı alınır
 ):
+    print("🔐 Gelen Authorization:", request.headers.get("authorization"))
     user_id = current_user["id"]  # ✅ Token'dan gelen ID
 
     df_user = df_ratings[df_ratings['user_id'] == user_id]
