@@ -791,10 +791,9 @@ class TokenData(BaseModel):
 #     print("🧪 JWT içeriği:", to_encode)
 #     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 #     return encoded_jwt
-def create_access_token(user_id: int):
+def create_access_token(user):
     to_encode = {
-        "sub": user_id,               # 👈 Artık `id` değil, `sub`
-        "email": email,               # (isteğe bağlı)
+        "email": user.email,
         "iat": datetime.utcnow(),
         "exp": datetime.utcnow() + timedelta(minutes=30)
     }
@@ -819,36 +818,33 @@ def create_access_token(user_id: int):
 #     if user is None:
 #         raise credentials_exception
 #     return user
-def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
-    print("🪪 Token geldi mi?:", token)
+def get_user_by_email(email: str):
+    # 🔁 SENİN kullanıcı modeline göre bu satırı düzenle
+    # örnek:
+    from models import User  # model dosyandaki User
+    from db import session   # SQLAlchemy session'ı
+    return session.query(User).filter(User.email == email).first()
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="Geçersiz token",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        user_id: int = payload.get("id")
-
-        if email is None or user_id is None:
+        email: str = payload.get("email")
+        if email is None:
             raise credentials_exception
-
-        token_data = TokenData(email=email)
+        
+        user = get_user_by_email(email)
+        if user is None:
+            raise credentials_exception
+        
+        return user  # dilersen .id olarak da dönebilirsin
 
     except JWTError:
         raise credentials_exception
-
-    user = fake_users_db.get(token_data.email)
-
-    if user is None:
-        raise credentials_exception
-
-    return {  # ← bu satır artık doğru hizada
-        "email": user["email"],
-        "id": user["id"],
-        "name": user["name"]
-    }
 
 @app.post("/login", response_model=Token)
 @limiter.limit("5/minute")
@@ -857,7 +853,7 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     if not user or form_data.password != user["password"]:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
-    access_token = create_access_token(user.id, user.email)
+    access_token = create_access_token(user)
     # access_token = create_access_token(
     # data={"sub": user["id"], "email": user["email"]},  # 👈 sub kullanıyoruz!
     # expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
