@@ -1012,7 +1012,6 @@ def recommend(
 ):
     try:
         print("🚀 /recommend endpoint çağrıldı")
-        print("📌 user_id:", user_id)
         print("📦 df_ratings boş mu?", df_ratings.empty)
         print("📦 df_books boş mu?", df_books.empty)
         print("📩 Headers:", request.headers)
