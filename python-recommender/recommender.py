@@ -1016,13 +1016,6 @@ def recommend(
 ):
     try:
         print("🚀 /recommend endpoint çağrıldı")
-        ...
-    except Exception as e:
-        print("❌ Genelde hata:", str(e))
-        import traceback
-        traceback.print_exc()  # Bu satır çok kritik!
-        raise HTTPException(status_code=500, detail="İç hata: " + str(e)) 
-    try:
         print("🔐 Gelen Authorization:", request.headers.get("authorization"))
 
         user_id = current_user["id"]
@@ -1040,25 +1033,29 @@ def recommend(
             else:
                 fallback_books = get_category_books(category="fiction", top_n=top_n)
 
-        recommendations = []
+            recommendations = []
 
-        for bid in fallback_books:
-            book_rows = df_books[df_books['book_id'] == bid]
+            for bid in fallback_books:
+                book_rows = df_books[df_books['book_id'] == bid]
 
-         if book_rows.empty:
-         print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
-         continue
+                if book_rows.empty:
+                    print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
+                    continue
 
-        book = book_rows.iloc[0].to_dict()
+                book = book_rows.iloc[0].to_dict()
 
-        recommendations.append({
-            "book_id": bid,
-            "score": None,
-            "source": f"fallback:{fallback}",
-            "title": book.get("title", "Bilinmeyen Kitap"),
-            "authors": book.get("authors", ""),
-            "thumbnail_url": book.get("thumbnail_url", "")
-        })
+                recommendations.append({
+                    "book_id": bid,
+                    "score": None,
+                    "source": f"fallback:{fallback}",
+                    "title": book.get("title", "Bilinmeyen Kitap"),
+                    "authors": book.get("authors", ""),
+                    "thumbnail_url": book.get("thumbnail_url", "")
+                })
+
+            return { "recommendations": recommendations }
+
+        # ML tabanlı öneri süreci
         seen = set(df_user['book_id'].tolist())
         candidates = [bid for bid in df_books['book_id'] if bid not in seen]
 
@@ -1077,8 +1074,8 @@ def recommend(
         try:
             db = mysql.connector.connect(
                 host=os.getenv("DB_HOST"),
-                user=os.getenv("DB_USER"),
                 port=int(os.getenv("DB_PORT")),
+                user=os.getenv("DB_USER"),
                 password=os.getenv("DB_PASSWORD"),
                 database=os.getenv("DB_NAME")
             )
@@ -1126,7 +1123,9 @@ def recommend(
 
     except Exception as e:
         print("❌ Genel Hata:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="İç hata: " + str(e))
 
 
 
