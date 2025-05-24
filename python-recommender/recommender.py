@@ -1014,7 +1014,16 @@ def recommend(
     fallback: str = Query("popular", enum=["popular", "random", "category"]),
     top_n: int = Query(10, ge=1, le=50),
     current_user: dict = Depends(get_current_user)
-): 
+):
+    try:
+        print("🚀 /recommend endpoint çağrıldı")
+        print("📩 Headers:", request.headers)
+        ...
+    except Exception as e:
+        print("❌ Genelde hata:", str(e))
+        import traceback
+        traceback.print_exc()  # Bu satır çok kritik!
+        raise HTTPException(status_code=500, detail="İç hata: " + str(e)) 
     try:
         print("🔐 Gelen Authorization:", request.headers.get("authorization"))
 
