@@ -1041,7 +1041,9 @@ def recommend(
 
             return {
                 "recommendations": [
-                    {"book_id": bid, "score": None, "source": f"fallback:{fallback}"}
+                    {"book_id": bid, "score": None, "source": f"fallback:{fallback}", "title": df_books[df_books["book_id"] == bid].iloc[0].get("title", "Bilinmeyen Kitap"),
+                    "authors": df_books[df_books["book_id"] == bid].iloc[0].get("authors", ""),
+                    "thumbnail_url": df_books[df_books["book_id"] == bid].iloc[0].get("thumbnail_url", "")}
                     for bid in fallback_books
                 ]
             }
