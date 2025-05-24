@@ -1031,23 +1031,34 @@ def recommend(
         df_user = df_ratings[df_ratings['user_id'] == user_id]
 
         if df_user.empty:
-            print("🔁 Fallback önerisi çalışıyor...")
-            if fallback == "popular":
-                fallback_books = get_popular_books(top_n=top_n)
-            elif fallback == "random":
-                fallback_books = get_random_books(top_n=top_n)
-            else:
-                fallback_books = get_category_books(category="fiction", top_n=top_n)
+    print("🔁 Fallback önerisi çalışıyor...")
 
-            return {
-                "recommendations": [
-                    {"book_id": bid, "score": None, "source": f"fallback:{fallback}", "title": df_books[df_books["book_id"] == bid].iloc[0].get("title", "Bilinmeyen Kitap"),
-                    "authors": df_books[df_books["book_id"] == bid].iloc[0].get("authors", ""),
-                    "thumbnail_url": df_books[df_books["book_id"] == bid].iloc[0].get("thumbnail_url", "")}
-                    for bid in fallback_books
-                ]
-            }
+    if fallback == "popular":
+        fallback_books = get_popular_books(top_n=top_n)
+    elif fallback == "random":
+        fallback_books = get_random_books(top_n=top_n)
+    else:
+        fallback_books = get_category_books(category="fiction", top_n=top_n)
 
+    recommendations = []
+
+    for bid in fallback_books:
+        book_rows = df_books[df_books['book_id'] == bid]
+
+        if book_rows.empty:
+            print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
+            continue
+
+        book = book_rows.iloc[0].to_dict()
+
+        recommendations.append({
+            "book_id": bid,
+            "score": None,
+            "source": f"fallback:{fallback}",
+            "title": book.get("title", "Bilinmeyen Kitap"),
+            "authors": book.get("authors", ""),
+            "thumbnail_url": book.get("thumbnail_url", "")
+        })
         seen = set(df_user['book_id'].tolist())
         candidates = [bid for bid in df_books['book_id'] if bid not in seen]
 
