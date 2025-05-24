@@ -210,6 +210,42 @@ module.exports = router;
 
 module.exports = router;
 // -------------------- Login Route (bcrypt ile) --------------------
+// app.post('/api/auth/login', async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+//     if (!email || !password) {
+//       return res.status(400).json({ error: 'E-posta ve şifre zorunludur.' });
+//     }
+
+//     /* 1) Kullanıcıyı e-posta ile çek */
+//     const [[user]] = await db.promise().query(
+//       'SELECT id, name, email, password AS pwdHash FROM users WHERE email = ?',
+//       [email]
+//     );
+//     if (!user) {
+//       // E-posta yoksa yine aynı hatayı döneriz: bilgi sızdırmıyoruz
+//       return res.status(401).json({ error: 'Geçersiz e-posta veya şifre.' });
+//     }
+
+//     /* 2) Şifreyi doğrula (bcryptjs) */
+//     const isMatch = await cmpPwd(password, user.pwdHash);
+//     if (!isMatch) {
+//       return res.status(401).json({ error: 'Geçersiz e-posta veya şifre.' });
+//     }
+
+//     /* 3) Başarılı giriş – şifre hash’ini response’a koymuyoruz */
+//     return res.status(200).json({
+//       message: 'Giriş başarılı!',
+//       user: { id: user.id, name: user.name, email: user.email }
+//     });
+//   } catch (err) {
+//     console.error('POST /api/auth/login error:', err);
+//     res.status(500).json({ error: 'Sunucu hatası.' });
+//   }
+// });
+
+const jwt = require('jsonwebtoken'); // varsa en başta
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -217,32 +253,38 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'E-posta ve şifre zorunludur.' });
     }
 
-    /* 1) Kullanıcıyı e-posta ile çek */
     const [[user]] = await db.promise().query(
       'SELECT id, name, email, password AS pwdHash FROM users WHERE email = ?',
       [email]
     );
+
     if (!user) {
-      // E-posta yoksa yine aynı hatayı döneriz: bilgi sızdırmıyoruz
       return res.status(401).json({ error: 'Geçersiz e-posta veya şifre.' });
     }
 
-    /* 2) Şifreyi doğrula (bcryptjs) */
     const isMatch = await cmpPwd(password, user.pwdHash);
     if (!isMatch) {
       return res.status(401).json({ error: 'Geçersiz e-posta veya şifre.' });
     }
 
-    /* 3) Başarılı giriş – şifre hash’ini response’a koymuyoruz */
+    // 🔑 JWT oluştur
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.SECRET_KEY,
+      { expiresIn: '1d' }
+    );
+
     return res.status(200).json({
       message: 'Giriş başarılı!',
-      user: { id: user.id, name: user.name, email: user.email }
+      user: { id: user.id, name: user.name, email: user.email },
+      access_token: token // Flutter buradan token’ı alacak
     });
   } catch (err) {
     console.error('POST /api/auth/login error:', err);
     res.status(500).json({ error: 'Sunucu hatası.' });
   }
 });
+
 
 // -------------------- Signup Route (bcrypt) --------------------
 app.post('/api/auth/signup', async (req, res) => {
