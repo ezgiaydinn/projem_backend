@@ -1012,9 +1012,6 @@ def recommend(
 ):
     try:
         print("🚀 /recommend endpoint çağrıldı")
-        print("📦 df_ratings boş mu?", df_ratings.empty)
-        print("📦 df_books boş mu?", df_books.empty)
-        print("📩 Headers:", request.headers)
         ...
     except Exception as e:
         print("❌ Genelde hata:", str(e))
