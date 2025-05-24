@@ -278,7 +278,7 @@ if (!isMatch) {
 const jwt = require('jsonwebtoken');
 const token = jwt.sign(
   { id: user.id, email: user.email },
-  process.env.JWT_SECRET || 'defaultsecretkey',
+  process.env.SECRET_KEY,
   { expiresIn: '1h' }
 );
 
