@@ -1031,14 +1031,14 @@ def recommend(
         df_user = df_ratings[df_ratings['user_id'] == user_id]
 
         if df_user.empty:
-    print("🔁 Fallback önerisi çalışıyor...")
+        print("🔁 Fallback önerisi çalışıyor...")
 
-    if fallback == "popular":
-        fallback_books = get_popular_books(top_n=top_n)
-    elif fallback == "random":
-        fallback_books = get_random_books(top_n=top_n)
-    else:
-        fallback_books = get_category_books(category="fiction", top_n=top_n)
+         if fallback == "popular":
+            fallback_books = get_popular_books(top_n=top_n)
+        elif fallback == "random":
+            fallback_books = get_random_books(top_n=top_n)
+        else:
+            fallback_books = get_category_books(category="fiction", top_n=top_n)
 
     recommendations = []
 
@@ -1046,8 +1046,8 @@ def recommend(
         book_rows = df_books[df_books['book_id'] == bid]
 
         if book_rows.empty:
-            print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
-            continue
+         print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
+         continue
 
         book = book_rows.iloc[0].to_dict()
 
