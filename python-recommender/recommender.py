@@ -1040,14 +1040,14 @@ def recommend(
             else:
                 fallback_books = get_category_books(category="fiction", top_n=top_n)
 
-    recommendations = []
+        recommendations = []
 
-    for bid in fallback_books:
-        book_rows = df_books[df_books['book_id'] == bid]
+        for bid in fallback_books:
+            book_rows = df_books[df_books['book_id'] == bid]
 
-        if book_rows.empty:
-         print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
-         continue
+         if book_rows.empty:
+            print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
+            continue
 
         book = book_rows.iloc[0].to_dict()
 
