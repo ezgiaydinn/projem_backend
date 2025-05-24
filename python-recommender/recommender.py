@@ -718,7 +718,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import random
-
+import mysql.connector
 # ---- 1) Ortam değişkenlerini yükle ----
 load_dotenv(dotenv_path=".env")
 
@@ -1006,96 +1006,106 @@ def get_category_books(category: str, top_n=10):
 #         })
 
 #     return {"recommendations": recommendations}
-@app.post("/recommend")
-@limiter.limit("10/minute")
+
+
+@app.get("/recommend")
 def recommend(
-    req: RecRequest,
     request: Request,
     fallback: str = Query("popular", enum=["popular", "random", "category"]),
-    current_user: dict = Depends(get_current_user)  # ✅ Token ile kullanıcı alınır
+    top_n: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user)
 ): 
-    print("🔐 Gelen Authorization:", request.headers.get("authorization"))
-    
-    
-    user_id = current_user["id"]  # ✅ Token'dan gelen ID
-
-    df_user = df_ratings[df_ratings['user_id'] == user_id]
-    top_n = req.top_n
-
-    if df_user.empty:
-        if fallback == "popular":
-            fallback_books = get_popular_books(top_n=top_n)
-        elif fallback == "random":
-            fallback_books = get_random_books(top_n=top_n)
-        else:
-            fallback_books = get_category_books(category="fiction", top_n=top_n)
-
-        return {
-            "recommendations": [
-                {
-                    "book_id": bid,
-                    "score": None,
-                    "source": f"fallback:{fallback}"
-                } for bid in fallback_books
-            ]
-        }
-
-    seen = set(df_user['book_id'].tolist())
-    candidates = [bid for bid in df_books['book_id'] if bid not in seen]
-
-    preds = []
-    for bid in candidates:
-        est = algo.predict(uid=user_id, iid=bid).est
-        preds.append((bid, est))
-    preds.sort(key=lambda x: x[1], reverse=True)
-    top_preds = preds[:top_n]
-
-    # 📝 Veritabanına yaz
     try:
-        db = mysql.connector.connect(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME")
-        )
-        cursor = db.cursor()
+        print("🔐 Gelen Authorization:", request.headers.get("authorization"))
 
-        # Eski önerileri sil
-        cursor.execute("DELETE FROM recommendations WHERE user_id = %s", (user_id,))
-        now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        user_id = current_user["id"]
+        print(f"📌 Kullanıcı ID: {user_id}, Top N: {top_n}")
 
-        for bid, score in top_preds:
-            cursor.execute(
-                """
-                INSERT INTO recommendations (user_id, book_id, score, created_at, source)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                (user_id, bid, round(score, 3), now, "ML")
+        df_user = df_ratings[df_ratings['user_id'] == user_id]
+
+        if df_user.empty:
+            print("🔁 Fallback önerisi çalışıyor...")
+            if fallback == "popular":
+                fallback_books = get_popular_books(top_n=top_n)
+            elif fallback == "random":
+                fallback_books = get_random_books(top_n=top_n)
+            else:
+                fallback_books = get_category_books(category="fiction", top_n=top_n)
+
+            return {
+                "recommendations": [
+                    {"book_id": bid, "score": None, "source": f"fallback:{fallback}"}
+                    for bid in fallback_books
+                ]
+            }
+
+        seen = set(df_user['book_id'].tolist())
+        candidates = [bid for bid in df_books['book_id'] if bid not in seen]
+
+        preds = []
+        for bid in candidates:
+            try:
+                est = algo.predict(uid=user_id, iid=bid).est
+                preds.append((bid, est))
+            except Exception as e:
+                print(f"⚠️ Predict hatası (book_id={bid}):", e)
+
+        preds.sort(key=lambda x: x[1], reverse=True)
+        top_preds = preds[:top_n]
+
+        # Veritabanına yazma
+        try:
+            db = mysql.connector.connect(
+                host=os.getenv("DB_HOST"),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                database=os.getenv("DB_NAME")
             )
+            cursor = db.cursor()
 
-        db.commit()
-        cursor.close()
-        db.close()
+            cursor.execute("DELETE FROM recommendations WHERE user_id = %s", (user_id,))
+            now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
+            for bid, score in top_preds:
+                cursor.execute(
+                    """
+                    INSERT INTO recommendations (user_id, book_id, score, created_at, source)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (user_id, bid, round(score, 3), now, "ML")
+                )
+
+            db.commit()
+            cursor.close()
+            db.close()
+        except Exception as e:
+            print("⚠️ Veritabanı hatası:", e)
+
+        # JSON yanıt
+        recommendations = []
+        for bid, score in top_preds:
+            book_rows = df_books[df_books['book_id'] == bid]
+            if book_rows.empty:
+                continue
+            book = book_rows.iloc[0].to_dict()
+            recommendations.append({
+                "book_id": bid,
+                "score": round(score, 3),
+                "title": book.get("title", ""),
+                "authors": book.get("authors", ""),
+                "thumbnail_url": book.get("thumbnail_url", ""),
+                "description": book.get("description", ""),
+                "publisher": book.get("publisher", ""),
+                "publishedDate": book.get("publishedDate", ""),
+                "pageCount": book.get("pageCount", 0),
+            })
+
+        return {"recommendations": recommendations}
+
     except Exception as e:
-        print("⚠️ Veritabanına yazılırken hata oluştu:", e)
+        print("❌ Genel Hata:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # JSON yanıt
-    recommendations = []
-    for bid, score in top_preds:
-        book = df_books[df_books['book_id'] == bid].iloc[0].to_dict()
-        recommendations.append({
-            "book_id": bid,
-            "score": round(score, 3),
-            "title": book.get("title", ""),
-            "authors": book.get("authors", ""),
-            "thumbnail_url": book.get("thumbnail_url", ""),
-            "description": book.get("description", ""),
-            "publisher": book.get("publisher", ""),
-            "publishedDate": book.get("publishedDate", ""),
-            "pageCount": book.get("pageCount", 0),
-        })
-
-    return {"recommendations": recommendations}
 
 
 # ---- 8) Rating ekleyip modeli yeniden eğiten endpoint ----
