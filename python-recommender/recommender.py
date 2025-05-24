@@ -1046,8 +1046,8 @@ def recommend(
             book_rows = df_books[df_books['book_id'] == bid]
 
          if book_rows.empty:
-            print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
-            continue
+         print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
+         continue
 
         book = book_rows.iloc[0].to_dict()
 
