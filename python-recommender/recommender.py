@@ -818,32 +818,27 @@ def create_access_token(user):
 #     if user is None:
 #         raise credentials_exception
 #     return user
-def get_user_by_email(email: str):
-    # 🔁 SENİN kullanıcı modeline göre bu satırı düzenle
-    # örnek:
-    from models import User  # model dosyandaki User
-    from db import session   # SQLAlchemy session'ı
-    return session.query(User).filter(User.email == email).first()
-
 def get_current_user(token: str = Depends(oauth2_scheme)):
     print("📦 Token geldi mi?:", token)
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Geçersiz token",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         print("📬 Payload çözüldü:", payload)
+
+        user_id: int = payload.get("id")
         email: str = payload.get("email")
-        if email is None:
+
+        if user_id is None or email is None:
             raise credentials_exception
-        
-        user = get_user_by_email(email)
-        if user is None:
-            raise credentials_exception
-        
-        return user  # dilersen .id olarak da dönebilirsin
+
+        # Kullanıcıyı artık DB'den çekmeye gerek yok
+        return {"id": user_id, "email": email}
 
     except JWTError as e:
         print("❌ Token decode hatası:", str(e))
@@ -1098,6 +1093,7 @@ def recommend(
         for bid, score in top_preds:
             book_rows = df_books[df_books['book_id'] == bid]
             if book_rows.empty:
+                print(f"⚠️ book_id {bid} için satır yok")
                 continue
             book = book_rows.iloc[0].to_dict()
             recommendations.append({
