@@ -148,45 +148,91 @@ def get_category_books(category: str, top_n=10):
     return random.sample(df_books['book_id'].tolist(), k=top_n)
 
 # ---- Öneri API'si ----
-@app.post("/recommend")
-@limiter.limit("10/minute")
+# @app.post("/recommend")
+# @limiter.limit("10/minute")
+# def recommend(
+#     req: RecRequest,
+#     request: Request,
+#     fallback: str = Query("popular", enum=["popular", "random", "category"]),
+#     current_user: dict = Depends(get_current_user)
+# ):
+#     user = req.user_id
+#     top_n = req.top_n
+
+#     df_user = df_ratings[df_ratings['user_id'] == user]
+#     if df_user.empty:
+#         if fallback == "popular":
+#             fallback_books = get_popular_books(top_n=top_n)
+#         elif fallback == "random":
+#             fallback_books = get_random_books(top_n=top_n)
+#         else:
+#             fallback_books = get_category_books(category="fiction", top_n=top_n)
+
+#         return {
+#             "recommendations": [
+#                 {"book_id": bid, "score": None, "source": f"fallback:{fallback}"}
+#                 for bid in fallback_books
+#             ]
+#         }
+
+#     seen = set(df_user['book_id'].tolist())
+#     candidates = [bid for bid in df_books['book_id'] if bid not in seen]
+
+#     preds = []
+#     for bid in candidates:
+#         est = algo.predict(uid=user, iid=bid).est
+#         preds.append((bid, est))
+#     preds.sort(key=lambda x: x[1], reverse=True)
+#     top_preds = preds[:top_n]
+
+#     recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
+#     return {"recommendations": recommendations}
+
+@app.get("/recommend")
 def recommend(
-    req: RecRequest,
     request: Request,
     fallback: str = Query("popular", enum=["popular", "random", "category"]),
-    current_user: dict = Depends(get_current_user)
+    user_id: int = Depends(verify_token)
 ):
-    user = req.user_id
-    top_n = req.top_n
+    try:
+        print(f"✅ Öneri istek geldi - User ID: {user_id}")
 
-    df_user = df_ratings[df_ratings['user_id'] == user]
-    if df_user.empty:
-        if fallback == "popular":
-            fallback_books = get_popular_books(top_n=top_n)
-        elif fallback == "random":
-            fallback_books = get_random_books(top_n=top_n)
-        else:
-            fallback_books = get_category_books(category="fiction", top_n=top_n)
+        df_user = df_ratings[df_ratings['user_id'] == user_id]
+        top_n = 10
 
-        return {
-            "recommendations": [
-                {"book_id": bid, "score": None, "source": f"fallback:{fallback}"}
-                for bid in fallback_books
-            ]
-        }
+        if df_user.empty:
+            print("🔁 Kullanıcı hiç oy vermemiş, fallback çalışıyor...")
+            if fallback == "popular":
+                fallback_books = get_popular_books(top_n=top_n)
+            elif fallback == "random":
+                fallback_books = get_random_books(top_n=top_n)
+            else:
+                fallback_books = get_category_books(category="fiction", top_n=top_n)
 
-    seen = set(df_user['book_id'].tolist())
-    candidates = [bid for bid in df_books['book_id'] if bid not in seen]
+            return {
+                "recommendations": [
+                    {"book_id": bid, "score": None, "source": f"fallback:{fallback}"}
+                    for bid in fallback_books
+                ]
+            }
 
-    preds = []
-    for bid in candidates:
-        est = algo.predict(uid=user, iid=bid).est
-        preds.append((bid, est))
-    preds.sort(key=lambda x: x[1], reverse=True)
-    top_preds = preds[:top_n]
+        seen = set(df_user['book_id'].tolist())
+        candidates = [bid for bid in df_books['book_id'] if bid not in seen]
 
-    recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
-    return {"recommendations": recommendations}
+        preds = []
+        for bid in candidates:
+            est = algo.predict(uid=user_id, iid=bid).est
+            preds.append((bid, est))
+        preds.sort(key=lambda x: x[1], reverse=True)
+        top_preds = preds[:top_n]
+
+        recommendations = [{"book_id": bid, "score": round(score, 3)} for bid, score in top_preds]
+        return {"recommendations": recommendations}
+
+    except Exception as e:
+        print(f"❌ Öneri hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ---- Oy Ekleyip Modeli Güncelle ----
 @app.post("/rate")
