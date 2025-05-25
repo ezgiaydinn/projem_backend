@@ -795,8 +795,9 @@ class TokenData(BaseModel):
 #     return encoded_jwt
 def create_access_token(user):
     to_encode = {
+        "id":   user["id"],  
         "email": user.email,
-        "name": user.name,
+        "name":  user.name,
         "iat": datetime.utcnow(),
         "exp": datetime.utcnow() + timedelta(minutes=30)
     }
@@ -836,6 +837,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
         user_id: int = payload.get("id")
         email: str = payload.get("email")
+        name: str = payload.get("name")
 
         if user_id is None or email is None:
             raise credentials_exception
