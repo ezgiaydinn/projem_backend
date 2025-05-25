@@ -171,14 +171,14 @@
 # df = pd.DataFrame(metrics, columns=['Metrik','Değer'])
 # print(df.to_markdown(index=False))
 import os
-import pandas as pd
-import numpy as np
-from surprise import Dataset, Reader, SVD
-from surprise.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-from sklearn.metrics.pairwise import cosine_similarity
-from dotenv import load_dotenv
-from sqlalchemy import create_engine
+import pandas as pd #type: ignore
+import numpy as np #type: ignore
+from surprise import Dataset, Reader, SVD #type: ignore
+from surprise.model_selection import train_test_split #type: ignore 
+from sklearn.metrics import mean_squared_error, mean_absolute_error #type: ignore
+from sklearn.metrics.pairwise import cosine_similarity #type: ignore
+from dotenv import load_dotenv #type: ignore
+from sqlalchemy import create_engine #type: ignore
 
 # Load environment
 load_dotenv(dotenv_path=".env")
