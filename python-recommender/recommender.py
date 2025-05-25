@@ -796,6 +796,7 @@ class TokenData(BaseModel):
 def create_access_token(user):
     to_encode = {
         "email": user.email,
+        "name": user.name,
         "iat": datetime.utcnow(),
         "exp": datetime.utcnow() + timedelta(minutes=30)
     }
