@@ -873,7 +873,18 @@ class RatingInput(BaseModel):
 def train_model():
     global algo, df_ratings, df_books
     df_ratings = pd.read_sql("SELECT user_id, book_id, rating FROM ratings", engine)
-    df_books = pd.read_sql("SELECT id AS book_id, title, authors FROM books", engine)
+    df_books = pd.read_sql("""
+    SELECT 
+        id AS book_id,
+        title,
+        authors,
+        thumbnail_url,
+        description,
+        publisher,
+        publishedDate,
+        pageCount
+    FROM books
+""", engine)
     reader = Reader(rating_scale=(1, 5))
     data = Dataset.load_from_df(df_ratings[['user_id', 'book_id', 'rating']], reader)
     trainset = data.build_full_trainset()
