@@ -882,7 +882,7 @@ def train_model():
         description,
         publisher,
         published_year,
-        pageCount
+        page_count
     FROM books
 """, engine)
     reader = Reader(rating_scale=(1, 5))
