@@ -881,7 +881,7 @@ def train_model():
         thumbnail_url,
         description,
         publisher,
-        publishedDate,
+        published_year,
         pageCount
     FROM books
 """, engine)
