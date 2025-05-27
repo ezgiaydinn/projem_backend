@@ -184,6 +184,12 @@ def recommend(
     top_n: int = Query(10, ge=1, le=50),
     current_user: dict = Depends(get_current_user)
 ):
+    def fix(text):
+        try:
+            return text.encode("latin1").decode("utf-8") if isinstance(text, str) else text
+        except:
+            return text
+
     try:
         print("🚀 /recommend endpoint çağrıldı")
         print("🔐 Gelen Authorization:", request.headers.get("authorization"))
@@ -212,7 +218,8 @@ def recommend(
                     print(f"⚠️ fallback kitap ID'si bulunamadı: {bid}")
                     continue
 
-                book = book_rows.iloc[0].to_dict()
+                raw_book = book_rows.iloc[0].to_dict()
+                book = {k: fix(v) for k, v in raw_book.items()}
 
                 recommendations.append({
                     "book_id": bid,
@@ -275,7 +282,8 @@ def recommend(
             if book_rows.empty:
                 print(f"⚠️ book_id {bid} için satır yok")
                 continue
-            book = book_rows.iloc[0].to_dict()
+            raw_book = book_rows.iloc[0].to_dict()
+            book = {k: fix(v) for k, v in raw_book.items()}
             recommendations.append({
                 "book_id": bid,
                 "score": round(score, 3),
