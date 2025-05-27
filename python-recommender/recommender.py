@@ -31,7 +31,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 # ---- SQLAlchemy engine ----
 engine = create_engine(
-    f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 )
 
 # ---- FastAPI Uygulaması ----
