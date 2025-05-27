@@ -179,7 +179,7 @@ router.get(
       const userId = req.user.id;
       // SQL ile direkt çekiyoruz
       const [rows] = await db.promise().query(
-        `SELECT r.book_id, r.score,
+        `SELECT r.book_id, r.score, r.source,
                 b.title, b.authors, b.thumbnail_url
          FROM recommendations AS r
          JOIN books AS b ON b.id = r.book_id
