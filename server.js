@@ -849,6 +849,7 @@ app.get('/api/recommendations', async (req, res) => {
       SELECT 
         r.book_id,
         r.score,
+        r.source,
         b.title,
         b.authors,
         b.thumbnail_url,
