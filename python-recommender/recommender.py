@@ -33,7 +33,7 @@ print("🧪 DB_PASSWORD:", DB_PASSWORD[:3] + "****")
 print("🧪 DB_NAME:", DB_NAME)
 
 engine = create_engine(
-    f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 )
 
 
