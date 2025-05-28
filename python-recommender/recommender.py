@@ -227,7 +227,7 @@ def recommend(
                     "source": f"fallback:{fallback}",
                     "title": book.get("title", "Bilinmeyen Kitap"),
                     "authors": book.get("authors", ""),
-                    "thumbnail_url": book.get("thumbnail_url", "")
+                    "thumbnail_url": book.get("thumbnailUrl", "")
                 })
 
             return { "recommendations": recommendations }
@@ -289,7 +289,7 @@ def recommend(
                 "score": round(score, 3),
                 "title": book.get("title", ""),
                 "authors": book.get("authors", ""),
-                "thumbnail_url": book.get("thumbnail_url", ""),
+                "thumbnail_url": book.get("thumbnailUrl", ""),
                 "description": book.get("description", ""),
                 "publisher": book.get("publisher", ""),
                 "publishedDate": book.get("publishedDate", ""),
