@@ -336,8 +336,6 @@ app.post('/api/auth/signup', async (req, res) => {
       html: `
         <p>Merhaba ${name},</p>
         <p>Hesabını aktifleştirmek için <a href="${webVerifyLink}">buraya tıkla</a>.</p>
-        <p>Uygulamada açmak istersen:</p>
-        <code>${deepVerifyLink}</code>
       `
     });
 
