@@ -220,15 +220,14 @@ def recommend(
 
                 raw_book = book_rows.iloc[0].to_dict()
                 book = {k: fix(v) for k, v in raw_book.items()}
-
-                print("📦 book keys:", book.keys())
                 recommendations.append({
                     "book_id": bid,
                     "score": None,
                     "source": f"fallback:{fallback}",
                     "title": book.get("title", "Bilinmeyen Kitap"),
                     "authors": book.get("authors", ""),
-                    "thumbnail_url": book.get("thumbnail_url", "")
+                    "thumbnail_url": book.get("thumbnail_url", ""),
+                    "debug_keys": list(book.keys())
                 })
 
             return { "recommendations": recommendations }
