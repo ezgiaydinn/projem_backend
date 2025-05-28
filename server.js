@@ -90,17 +90,13 @@ app.post('/api/auth/forgot', async (req, res) => {
 `Merhaba,
 
 Şifrenizi 30 dk içinde sıfırlamak için bu linki açın:
-${webLink}
-
-Uygulamada otomatik açmak isterseniz:
-${deepLink}`,
+${webLink}`,
       html:
 `<p>Merhaba,</p>
 <p>Şifrenizi 30&nbsp;dk içinde sıfırlamak için
-<a href="${webLink}">buraya tıklayın</a>.</p>
-<p><strong>Uygulamada açmak için:</strong><br>
-<code>${deepLink}</code></p>`
-    });
+<a href="${webLink}">buraya tıklayın</a>.
+  </p>`
+  });
 
     console.log(`🔗 Reset link (web):  ${webLink}`);
     console.log(`🔗 Reset link (deep): ${deepLink}`);
