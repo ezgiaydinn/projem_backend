@@ -142,7 +142,7 @@ def train_model():
         id AS book_id,
         title,
         authors,
-        thumbnail_url,
+        thumbnail_url AS thumbnailUrl,
         description,
         publisher,
         published_year,
