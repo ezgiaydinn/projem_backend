@@ -141,7 +141,7 @@ def train_model():
     SELECT 
         id AS book_id,
         title,
-        authors,
+        authors,          
         thumbnail_url AS thumbnailUrl,
         description,
         publisher,
@@ -227,7 +227,7 @@ def recommend(
                     "source": f"fallback:{fallback}",
                     "title": book.get("title", "Bilinmeyen Kitap"),
                     "authors": book.get("authors", ""),
-                    "thumbnail_url": book.get("thumbnailUrl", "")
+                    "thumbnail_url": book.get("thumbnail_url", "")
                 })
 
             return { "recommendations": recommendations }
@@ -289,7 +289,7 @@ def recommend(
                 "score": round(score, 3),
                 "title": book.get("title", ""),
                 "authors": book.get("authors", ""),
-                "thumbnail_url": book.get("thumbnailUrl", ""),
+                "thumbnail_url": book.get("thumbnail_url", ""),
                 "description": book.get("description", ""),
                 "publisher": book.get("publisher", ""),
                 "publishedDate": book.get("publishedDate", ""),
