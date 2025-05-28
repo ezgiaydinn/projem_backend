@@ -664,6 +664,7 @@ app.get('/api/favorites/:userId', async (req, res) => {
         b.genre          AS genre,
         b.page_count     AS pageCount,
         b.language       AS language,
+        b.description    AS description,
         f.created_at     AS createdAt
       FROM favorites f
       JOIN books b ON f.book_id = b.id
@@ -691,6 +692,7 @@ app.get('/api/favorites/:userId', async (req, res) => {
         genre:         r.genre || '',
         pageCount:     r.pageCount || 0,
         language:      r.language || '',
+        description:   r.description || '',
         createdAt:     r.createdAt
       };
     });
