@@ -221,6 +221,7 @@ def recommend(
                 raw_book = book_rows.iloc[0].to_dict()
                 book = {k: fix(v) for k, v in raw_book.items()}
 
+                print("📦 book keys:", book.keys())
                 recommendations.append({
                     "book_id": bid,
                     "score": None,
