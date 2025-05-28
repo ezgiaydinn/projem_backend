@@ -761,7 +761,8 @@ app.get('/api/library/:userId', async (req, res) => {
         b.publisher      AS publisher,
         b.published_date AS publishedDate,
         b.page_count     AS pageCount,
-        b.language       AS language
+        b.language       AS language,
+        b.description    AS description
       FROM librarys l
       JOIN books b ON l.book_id = b.id
       WHERE l.user_id = ?
@@ -788,6 +789,7 @@ app.get('/api/library/:userId', async (req, res) => {
         publishedDate: r.publishedDate || null,
         pageCount:     r.pageCount || 0,
         language:      r.language || '',
+        description:   r.description || '',
         addedAt:       r.addedAt
       };
     });
