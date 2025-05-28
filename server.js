@@ -850,7 +850,7 @@ app.get('/api/recommendations', async (req, res) => {
         r.source,
         b.title,
         b.authors,
-        b.thumbnail_url AS thumbnailUrl,
+        b.thumbnail_url,
         b.publisher,
         b.published_date,
         b.description
